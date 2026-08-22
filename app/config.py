@@ -23,3 +23,5 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     openai_model: str = "gpt-5.6-luna"
     openai_timeout_seconds: float = Field(default=8.0, ge=1.0, le=30.0)
+    elevenlabs_agent_id: str | None = None
+    elevenlabs_tool_secret: SecretStr | None = None

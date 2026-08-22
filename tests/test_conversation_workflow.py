@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.agent.models import (
@@ -32,6 +33,7 @@ def interpretation(
     abusive: bool = False,
     outside_confirmed: bool = False,
     location_confirmation: bool | None = None,
+    availability_confirmation_required: bool = False,
     relative_date: bool = False,
     date_confirmed: bool = False,
     explanation: str = "Test extraction.",
@@ -50,6 +52,9 @@ def interpretation(
         abusive_language=abusive,
         confirmed_outside_service_area=outside_confirmed,
         location_suggestion_confirmed=location_confirmation,
+        availability_full_time_confirmation_required=(
+            availability_confirmation_required
+        ),
         start_date_is_relative=relative_date,
         start_date_confirmed=date_confirmed,
         debug_explanation=explanation,
@@ -182,7 +187,7 @@ def test_start_explains_process_and_progress_begins_at_zero(tmp_path: Path) -> N
     expected = (
         "Hola 👋 Hemos recibido tu candidatura para el puesto de repartidor/a "
         "en Grupo Sazón. El screening dura unos 3 minutos. Para continuar, "
-        "¿cuál es tu nombre completo? Puedes responder en español or English."
+        "¿cuál es tu nombre completo?"
     )
     with screening_client(tmp_path, []) as (client, _, conversation_id, _):
         response = start(client, conversation_id)
@@ -453,6 +458,52 @@ def test_known_madrid_plus_city_center_resolves_supported_area(
     assert "service_area" not in second.json()["missing_fields"]
 
 
+def test_multiple_supported_locations_require_a_primary_choice(
+    tmp_path: Path,
+) -> None:
+    identity = interpretation(
+        full_name="Ana Demo",
+        driver_license=DriverLicense.YES,
+    )
+    alternatives = interpretation(
+        consent=None,
+        ambiguous=True,
+        clarification_fields=["service_area"],
+        location_raw="Madrid por Sanse o por el centro",
+        location_city="Madrid",
+        location_zone="Centro",
+    )
+    selected = interpretation(
+        consent=None,
+        location_raw="Sanse",
+        location_city="Sanse",
+        location_zone="Sanse",
+    )
+    with screening_client(tmp_path, [identity, alternatives, selected]) as (
+        client,
+        database_path,
+        conversation_id,
+        _,
+    ):
+        start(client, conversation_id)
+        send(client, conversation_id, "Ana Demo, carnet vigente")
+        choice = send(client, conversation_id, "Madrid por Sanse o por el centro")
+        choice_record = screening_row(database_path)
+        resolved = send(client, conversation_id, "Sanse")
+        resolved_record = screening_row(database_path)
+
+    assert choice.json()["assistant_message"]["content"] == (
+        "¿Qué zona prefieres como principal: San Sebastián de los Reyes o "
+        "Madrid Centro?"
+    )
+    assert choice.json()["conversation_status"] == "in_progress"
+    assert json.loads(choice_record["clarification_counts"]).get("service_area") is None
+    resolved_data = json.loads(resolved_record["data"])
+    assert resolved_data["location_city"] == "San Sebastián de los Reyes"
+    assert resolved_data["location_zone"] == "Área urbana"
+    assert resolved.json()["conversation_status"] == "in_progress"
+
+
 def test_unknown_location_disqualifies_only_after_confirmation(
     tmp_path: Path,
 ) -> None:
@@ -499,6 +550,126 @@ def test_unresolved_location_reaches_retry_limit_after_two_failed_follow_ups(
     assert first.json()["conversation_status"] == "in_progress"
     assert second.json()["conversation_status"] == "in_progress"
     assert terminal.json()["outcome"] == "needs_review"
+
+
+def _availability_setup() -> MessageInterpretation:
+    return interpretation(
+        full_name="Ana Demo",
+        driver_license=DriverLicense.YES,
+        location_raw="Madrid Centro",
+        location_city="Madrid",
+        location_zone="Centro",
+    )
+
+
+@pytest.mark.parametrize(
+    "candidate_text",
+    ["cuando sea", "me da igual el horario", "a cualquier hora"],
+)
+def test_flexible_schedule_is_useful_partial_information(
+    tmp_path: Path,
+    candidate_text: str,
+) -> None:
+    flexible = interpretation(
+        consent=None,
+        clarification_fields=["availability"],
+        preferred_schedule=[Schedule.FLEXIBLE],
+    )
+    with screening_client(tmp_path, [_availability_setup(), flexible]) as (
+        client,
+        database_path,
+        conversation_id,
+        _,
+    ):
+        start(client, conversation_id)
+        send(client, conversation_id, "Datos iniciales")
+        response = send(client, conversation_id, candidate_text)
+        record = screening_row(database_path)
+
+    assert response.json()["assistant_message"]["content"] == (
+        "Perfecto, tienes flexibilidad horaria. "
+        "¿Buscas jornada completa o parcial?"
+    )
+    data = json.loads(record["data"])
+    assert data["preferred_schedule"] == ["flexible"]
+    assert data["availability"] == []
+    assert json.loads(record["clarification_counts"]).get("availability") is None
+    assert response.json()["conversation_status"] == "in_progress"
+
+
+@pytest.mark.parametrize("candidate_text", ["puedo cualquier día", "todos los días"])
+def test_any_day_availability_requires_full_time_confirmation(
+    tmp_path: Path,
+    candidate_text: str,
+) -> None:
+    any_day = interpretation(
+        consent=None,
+        availability_confirmation_required=True,
+        availability=[Availability.WEEKENDS],
+    )
+    with screening_client(tmp_path, [_availability_setup(), any_day]) as (
+        client,
+        database_path,
+        conversation_id,
+        _,
+    ):
+        start(client, conversation_id)
+        send(client, conversation_id, "Datos iniciales")
+        response = send(client, conversation_id, candidate_text)
+        record = screening_row(database_path)
+
+    assert response.json()["assistant_message"]["content"] == (
+        "Entendido, puedes trabajar cualquier día, incluidos fines de semana. "
+        "¿Confirmas que tienes disponibilidad para jornada completa?"
+    )
+    data = json.loads(record["data"])
+    assert data["availability"] == ["weekends"]
+    assert "full_time" not in data["availability"]
+    assert json.loads(record["pending_data"])[
+        "availability_full_time_confirmation"
+    ] is True
+    assert response.json()["conversation_status"] == "in_progress"
+
+
+def test_flexible_then_any_day_progress_does_not_route_to_review(
+    tmp_path: Path,
+) -> None:
+    flexible = interpretation(
+        consent=None,
+        clarification_fields=["availability"],
+        preferred_schedule=[Schedule.FLEXIBLE],
+    )
+    any_day = interpretation(
+        consent=None,
+        availability_confirmation_required=True,
+        availability=[Availability.WEEKENDS],
+    )
+    full_time = interpretation(
+        consent=None,
+        availability=[Availability.FULL_TIME],
+    )
+    with screening_client(
+        tmp_path,
+        [_availability_setup(), flexible, any_day, full_time],
+    ) as (client, database_path, conversation_id, _):
+        start(client, conversation_id)
+        send(client, conversation_id, "Datos iniciales")
+        first = send(client, conversation_id, "cuando sea")
+        second = send(client, conversation_id, "puedo cualquier día")
+        third = send(client, conversation_id, "sí")
+        record = screening_row(database_path)
+
+    assert first.json()["conversation_status"] == "in_progress"
+    assert second.json()["conversation_status"] == "in_progress"
+    assert third.json()["conversation_status"] == "in_progress"
+    assert json.loads(record["data"])["availability"] == [
+        "weekends",
+        "full_time",
+    ]
+    assert "availability_full_time_confirmation" not in json.loads(
+        record["pending_data"]
+    )
+    assert json.loads(record["clarification_counts"]).get("availability") is None
 
 
 def test_spanish_happy_path(tmp_path: Path) -> None:
@@ -553,7 +724,11 @@ def test_english_happy_path(tmp_path: Path) -> None:
         initial = start(client, conversation_id)
         terminal = send(client, conversation_id, "Here is all my information")
 
-    assert "what is your full name?" in initial.json()["assistant_message"]["content"]
+    assert initial.json()["assistant_message"]["content"] == (
+        "Hi 👋 We received your application for the delivery driver role at Grupo "
+        "Sazón. The screening takes about 3 minutes. To continue, what is your "
+        "full name?"
+    )
     assert terminal.json()["outcome"] == "qualified"
     assert terminal.json()["assistant_message"]["content"] == (
         "Thank you, Alex. You have completed the initial screening and meet the "
@@ -760,7 +935,7 @@ def test_past_start_date_requires_clarification(tmp_path: Path) -> None:
     assert response.json()["conversation_status"] == "in_progress"
     assert "start_date" in response.json()["missing_fields"]
     assert data["start_date"] is None
-    assert json.loads(record["clarification_counts"])["start_date"] == 1
+    assert json.loads(record["clarification_counts"]).get("start_date") is None
 
 
 def test_relative_start_date_requires_explicit_confirmation(tmp_path: Path) -> None:

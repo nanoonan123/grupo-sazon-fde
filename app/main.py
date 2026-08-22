@@ -16,6 +16,7 @@ from app.recruiter import router as recruiter_router
 from app.routes import router
 from app.service_areas import ServiceAreaCatalog
 from app.trace import router as trace_router
+from app.voice import router as voice_router
 from app.web import router as web_router
 
 
@@ -48,6 +49,10 @@ def create_app(
                 "name": "Conversations",
                 "description": "Candidate screening conversation turns.",
             },
+            {
+                "name": "Voice",
+                "description": "Authenticated ElevenLabs conversation adapter.",
+            },
             {"name": "Operations", "description": "Service health checks."},
             {
                 "name": "Recruiter",
@@ -76,8 +81,17 @@ def create_app(
         catalog,
         resolved_settings.ambiguity_retry_limit,
     )
+    application.state.elevenlabs_agent_id = (
+        (resolved_settings.elevenlabs_agent_id or "").strip() or None
+    )
+    application.state.elevenlabs_tool_secret = (
+        resolved_settings.elevenlabs_tool_secret.get_secret_value().strip() or None
+        if resolved_settings.elevenlabs_tool_secret
+        else None
+    )
     application.include_router(router)
     application.include_router(conversation_router)
+    application.include_router(voice_router)
     application.include_router(recruiter_router)
     application.include_router(web_router)
     trace_enabled = resolved_settings.app_environment.casefold() != "production"

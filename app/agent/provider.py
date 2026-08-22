@@ -58,6 +58,24 @@ extracted location; never decide whether it is supported. For dates, never map
 "yesterday" to immediate availability. Flag relative dates, propose their explicit
 calendar date using the supplied current UTC date, and leave confirmation to code.
 
+Availability and schedule are separate facts. Examples:
+- "cuando sea", "me da igual el horario", "a cualquier hora", "any time works",
+  "I do not mind the schedule", and "at any hour" mean preferred_schedule is
+  ["flexible"]. They do not establish full-time or part-time availability.
+- "puedo cualquier día", "todos los días", "I can work any day", and "every day"
+  establish availability including ["weekends"], but do not establish full-time.
+  For those expressions set availability_full_time_confirmation_required true so
+  deterministic code can ask whether full-time is available.
+- When the supplied context says full-time confirmation is pending, an affirmative
+  answer proposes ["full_time"] and a negative/part-time answer proposes
+  ["part_time"].
+
+For multiple locations, preserve every option in location_raw and mark service_area
+for clarification rather than choosing one. For example, "Madrid por Sanse o por el
+centro" and "Madrid around Sanse or the city centre" are ambiguous; Sanse means San
+Sebastián de los Reyes, while "el centro" in that phrase means Madrid Centro. The
+configured catalogue, not the model, decides whether either location is supported.
+
 The debug explanation must be a short factual extraction note, not hidden reasoning,
 personality analysis, sentiment scoring, or a qualification recommendation. Never
 use protected characteristics as screening information.

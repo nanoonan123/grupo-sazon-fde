@@ -70,7 +70,7 @@ async def _trace_payload(
         except json.JSONDecodeError:
             parsed = None
         if isinstance(parsed, dict) and isinstance(parsed.get("executed_nodes"), list):
-            latest_turn = parsed
+            latest_turn = {**parsed, "turn_sequence": message.sequence_number}
     return {
         "mode": "post_turn",
         "graph": GRAPH_STRUCTURE,

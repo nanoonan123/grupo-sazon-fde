@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Operaciones · Grupo Sazón{% endblock %}
+{% block title %}Panel interno de selección · Grupo Sazón{% endblock %}
 {% block body_class %}surface-page dashboard-page{% endblock %}
 {% block head %}<script defer src="{{ url_for('static', path='/recruiter.js') }}"></script>{% endblock %}
 {% block body %}
   <header class="surface-header">
-    <a class="brand-lockup" href="/recruiter"><img src="{{ url_for('static', path='/logo.svg') }}" alt="" width="44" height="44"><div><strong>Grupo Sazón</strong><span data-copy-es="Operaciones · demo ficticia" data-copy-en="Operations · fictional demo">Operaciones · demo ficticia</span></div></a>
+    <a class="brand-lockup" href="/recruiter"><img src="{{ url_for('static', path='/logo.svg') }}" alt="" width="44" height="44"><div><strong>Grupo Sazón · Internal HR</strong><span data-copy-es="Panel interno de selección" data-copy-en="Internal recruitment dashboard">Panel interno de selección</span></div></a>
     <div class="language-switch" role="group" aria-label="Idioma de la interfaz" data-aria-es="Idioma de la interfaz" data-aria-en="Interface language"><button type="button" class="language-button" data-language="es" aria-pressed="true">ES</button><button type="button" class="language-button" data-language="en" aria-pressed="false">EN</button></div>
   </header>
   <main class="surface-main dashboard-layout">
-    <div class="dashboard-heading"><div><div class="eyebrow" data-copy-es="Panel de operaciones" data-copy-en="Operations dashboard">Panel de operaciones</div><h1 data-copy-es="Screening de candidaturas" data-copy-en="Candidate screening">Screening de candidaturas</h1><p data-copy-es="Métricas medidas sobre los registros sintéticos de esta demo." data-copy-en="Metrics measured from this demo's synthetic records.">Métricas medidas sobre los registros sintéticos de esta demo.</p></div><a class="secondary-button" href="/demo" data-copy-es="Nueva demo ATS" data-copy-en="New ATS demo">Nueva demo ATS</a></div>
+    <div class="dashboard-heading"><div><div class="eyebrow" data-copy-es="Panel interno de selección" data-copy-en="Internal recruitment dashboard">Panel interno de selección</div><h1 data-copy-es="Screening de candidaturas" data-copy-en="Candidate screening">Screening de candidaturas</h1><p data-copy-es="Uso exclusivo del equipo de RRHH de Grupo Sazón" data-copy-en="For exclusive use by Grupo Sazón's HR team">Uso exclusivo del equipo de RRHH de Grupo Sazón</p></div><a class="secondary-button" href="/demo" data-copy-es="Nueva demo ATS" data-copy-en="New ATS demo">Nueva demo ATS</a></div>
 
     <section class="baseline-panel" aria-labelledby="baseline-title"><div><span class="data-label" data-copy-es="Contexto aportado por el cliente" data-copy-en="Client-provided context">Contexto aportado por el cliente</span><h2 id="baseline-title" data-copy-es="Línea base declarada · no medida por esta demo" data-copy-en="Stated baseline · not measured by this demo">Línea base declarada · no medida por esta demo</h2></div><ul><li><strong>≈200</strong><span data-copy-es="candidaturas por semana" data-copy-en="applications per week">candidaturas por semana</span></li><li><strong>60%</strong><span data-copy-es="no responde llamadas" data-copy-en="do not answer calls">no responde llamadas</span></li><li><strong>80%</strong><span data-copy-es="del tiempo en perfiles no cualificados" data-copy-en="of time on unqualified profiles">del tiempo en perfiles no cualificados</span></li></ul></section>
 

@@ -18,9 +18,11 @@ from app.agent.models import (
 )
 from app.agent.provider import ProviderUnavailableError, ScreeningLLMProvider
 from app.domain.models import (
+    Availability,
     DisqualificationReason,
     DriverLicense,
     EligibilityContext,
+    Schedule,
     ScreeningData,
     ScreeningStatus,
 )
@@ -81,6 +83,7 @@ FIELD_TO_STAGE = {
 }
 
 KNOWN_CLARIFICATION_FIELDS = frozenset(FIELD_TO_STAGE)
+AVAILABILITY_CONFIRMATION_KEY = "availability_full_time_confirmation"
 
 
 def _latest_candidate_text(state: ScreeningGraphState) -> str:
@@ -287,6 +290,27 @@ def _merge_location(
         return {"service_area"}
 
     state["service_area_supported"] = None
+    if resolution.status is LocationResolutionStatus.AMBIGUOUS:
+        pending["location"] = {
+            "status": "alternatives",
+            "alternatives": [
+                {
+                    "country_code": area.country_code,
+                    "city": area.city,
+                    "zone": area.zone,
+                    "label": (
+                        area.city
+                        if area.zone == "Área urbana"
+                        else f"{area.city} {area.zone}"
+                    ),
+                }
+                for area in resolution.alternatives
+            ],
+            "raw": raw,
+        }
+        clarifications.add("service_area")
+        return set()
+
     if resolution.status is LocationResolutionStatus.SUGGESTION:
         suggestion = resolution.suggestion
         if suggestion is None:
@@ -478,7 +502,46 @@ def build_screening_graph(
             clarifications.add(missing[0] if missing else state["stage"].value)
 
         was_clarifying_location = isinstance(pending.get("location"), dict)
-        resolved = _merge_simple_updates(data, interpretation, clarifications)
+        was_awaiting_availability_confirmation = (
+            pending.get(AVAILABILITY_CONFIRMATION_KEY) is True
+        )
+        proposed_availability = interpretation.updates.availability or []
+        requires_availability_confirmation = (
+            interpretation.availability_full_time_confirmation_required
+            and Availability.WEEKENDS in proposed_availability
+        )
+        validated_interpretation = interpretation
+        if requires_availability_confirmation and not (
+            was_awaiting_availability_confirmation
+        ):
+            validated_interpretation = interpretation.model_copy(deep=True)
+            validated_interpretation.updates.availability = [Availability.WEEKENDS]
+            clarifications.discard("availability")
+        elif was_awaiting_availability_confirmation and any(
+            value in proposed_availability
+            for value in (Availability.FULL_TIME, Availability.PART_TIME)
+        ):
+            clarifications.discard("availability")
+
+        data_before_turn = data.model_copy(deep=True)
+        availability_before_turn = list(data.availability)
+        resolved = _merge_simple_updates(
+            data,
+            validated_interpretation,
+            clarifications,
+        )
+        if was_awaiting_availability_confirmation and any(
+            value in proposed_availability
+            for value in (Availability.FULL_TIME, Availability.PART_TIME)
+        ):
+            data.availability = list(
+                dict.fromkeys([*availability_before_turn, *data.availability])
+            )
+            pending.pop(AVAILABILITY_CONFIRMATION_KEY, None)
+        elif requires_availability_confirmation:
+            pending[AVAILABILITY_CONFIRMATION_KEY] = True
+            if was_awaiting_availability_confirmation:
+                clarifications.add("availability")
         if consent_newly_granted:
             resolved.add("consent")
         location_state = cast(ScreeningGraphState, {**state, **updates})
@@ -503,9 +566,13 @@ def build_screening_graph(
                 clarifications,
             )
         )
+        made_progress = data != data_before_turn
         for field in resolved - clarifications:
             counts.pop(field, None)
         for field in clarifications:
+            if made_progress:
+                counts.pop(field, None)
+                continue
             if field == "service_area" and not was_clarifying_location:
                 continue
             counts[field] = counts.get(field, 0) + 1
@@ -590,12 +657,20 @@ def build_screening_graph(
             evaluation.status = ScreeningStatus.IN_PROGRESS
         missing = completion_missing
         stage = ScreeningStage.COMPLETE
+        if (
+            state["pending_data"].get(AVAILABILITY_CONFIRMATION_KEY) is True
+            and route in {GraphRoute.ASK_NEXT_QUESTION, GraphRoute.QUALIFIED}
+        ):
+            route = GraphRoute.ASK_NEXT_QUESTION
+            evaluation.status = ScreeningStatus.IN_PROGRESS
+            stage = ScreeningStage.AVAILABILITY
         if route is GraphRoute.ASK_NEXT_QUESTION:
             current_clarification = next(iter(turn_fields), None)
-            stage = FIELD_TO_STAGE.get(
-                current_clarification,
-                _stage_for_missing(missing),
-            )
+            if stage is not ScreeningStage.AVAILABILITY:
+                stage = FIELD_TO_STAGE.get(
+                    current_clarification,
+                    _stage_for_missing(missing),
+                )
         return {
             "route": route,
             "status": evaluation.status,
@@ -751,6 +826,21 @@ def _location_question(state: ScreeningGraphState, spanish: bool) -> str:
             f"¿Te refieres a {city}, zona {zone}?"
             if spanish
             else f"Do you mean {city}, {zone} zone?"
+        )
+    if status == "alternatives":
+        alternatives = location.get("alternatives", [])
+        labels = [
+            str(alternative.get("label"))
+            for alternative in alternatives
+            if isinstance(alternative, dict) and alternative.get("label")
+        ]
+        if set(labels) == {"San Sebastián de los Reyes", "Madrid Centro"}:
+            labels = ["San Sebastián de los Reyes", "Madrid Centro"]
+        joined = (" o " if spanish else " or ").join(labels)
+        return (
+            f"¿Qué zona prefieres como principal: {joined}?"
+            if spanish
+            else f"Which area do you prefer as your primary location: {joined}?"
         )
     missing = set(location.get("missing_components", []))
     if missing == {"country"}:
@@ -914,6 +1004,30 @@ def _compose_candidate_response(
         return f"{prefix} {question}".strip()
     if "service_area" in state["turn_clarification_fields"]:
         return question
+    if state["pending_data"].get(AVAILABILITY_CONFIRMATION_KEY) is True:
+        return (
+            "Entendido, puedes trabajar cualquier día, incluidos fines de semana. "
+            "¿Confirmas que tienes disponibilidad para jornada completa?"
+            if spanish
+            else (
+                "Understood, you can work any day, including weekends. "
+                "Can you confirm that you are available full-time?"
+            )
+        )
+    if (
+        state["stage"] is ScreeningStage.AVAILABILITY
+        and "preferred_schedule" in state["turn_resolved_fields"]
+        and Schedule.FLEXIBLE in state["screening_data"].preferred_schedule
+    ):
+        return (
+            "Perfecto, tienes flexibilidad horaria. "
+            "¿Buscas jornada completa o parcial?"
+            if spanish
+            else (
+                "Perfect, you have schedule flexibility. "
+                "Are you looking for full-time or part-time work?"
+            )
+        )
     if state["turn_clarification_fields"]:
         prefix = (
             "No pude confirmar esa respuesta."

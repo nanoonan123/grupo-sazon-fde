@@ -25,6 +25,7 @@ def test_openapi_groups_operational_workflows() -> None:
     assert [tag["name"] for tag in schema["tags"]] == [
         "ATS",
         "Conversations",
+        "Voice",
         "Operations",
         "Recruiter",
         "Developer",
@@ -37,6 +38,8 @@ def test_openapi_groups_operational_workflows() -> None:
     assert recruiter["get"]["tags"] == ["Recruiter"]
     trace = schema["paths"]["/api/debug/conversations/{conversation_id}/trace"]
     assert trace["get"]["tags"] == ["Developer"]
+    voice = schema["paths"]["/api/voice/conversations/{conversation_id}/turn"]
+    assert voice["post"]["tags"] == ["Voice"]
 
 
 def test_production_does_not_register_debug_trace() -> None:

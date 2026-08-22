@@ -27,6 +27,17 @@
           "demo_only": true
         },
         {
+          "city": "San Sebastián de los Reyes",
+          "city_aliases": ["San Sebastian de los Reyes", "Sanse"],
+          "zone": "Área urbana",
+          "zone_aliases": [
+            "San Sebastián de los Reyes",
+            "San Sebastian de los Reyes",
+            "Sanse"
+          ],
+          "demo_only": true
+        },
+        {
           "city": "Valencia",
           "city_aliases": [],
           "zone": "Turia",

@@ -218,6 +218,32 @@ class InboundEvent(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
 
 
+class VoiceTurnReceipt(Base):
+    """Idempotency receipt for one external ElevenLabs candidate turn."""
+
+    __tablename__ = "voice_turn_receipts"
+    __table_args__ = (
+        UniqueConstraint(
+            "conversation_id",
+            "external_turn_id",
+            name="uq_voice_turn_conversation_external_id",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        index=True,
+    )
+    external_turn_id: Mapped[str] = mapped_column(String(255))
+    transcript_hash: Mapped[str] = mapped_column(String(64))
+    response_payload: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
+
+
 class Database:
     """Own the async engine and session factory for one application instance."""
 

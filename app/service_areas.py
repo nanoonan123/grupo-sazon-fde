@@ -32,6 +32,7 @@ class LocationResolutionStatus(StrEnum):
     """Possible deterministic outcomes from resolving candidate location text."""
 
     RESOLVED = "resolved"
+    AMBIGUOUS = "ambiguous"
     INCOMPLETE = "incomplete"
     SUGGESTION = "suggestion"
     UNKNOWN = "unknown"
@@ -60,6 +61,7 @@ class LocationResolution:
     zone: str | None = None
     missing_components: tuple[str, ...] = ()
     suggestion: ServiceArea | None = None
+    alternatives: tuple[ServiceArea, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -252,6 +254,12 @@ class ServiceAreaCatalog:
                     zone=example.zone,
                     missing_components=("country",),
                 )
+            return LocationResolution(
+                status=LocationResolutionStatus.AMBIGUOUS,
+                alternatives=tuple(
+                    sorted(exact, key=lambda area: (area.city, area.zone))
+                ),
+            )
 
         suggestion = self._suggestion(
             normalized_raw,

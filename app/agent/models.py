@@ -84,6 +84,7 @@ class MessageInterpretation(BaseModel):
     abusive_language: bool = False
     confirmed_outside_service_area: bool = False
     location_suggestion_confirmed: bool | None = None
+    availability_full_time_confirmation_required: bool = False
     start_date_is_relative: bool = False
     start_date_confirmed: bool = False
     debug_explanation: str = ""

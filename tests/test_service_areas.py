@@ -97,6 +97,18 @@ def test_unknown_location_is_not_supported(catalog: ServiceAreaCatalog) -> None:
     assert result.status is LocationResolutionStatus.UNKNOWN
 
 
+def test_sanse_and_madrid_centre_are_returned_as_distinct_alternatives(
+    catalog: ServiceAreaCatalog,
+) -> None:
+    result = catalog.resolve(raw="Madrid por Sanse o por el centro")
+
+    assert result.status is LocationResolutionStatus.AMBIGUOUS
+    assert {(area.city, area.zone) for area in result.alternatives} == {
+        ("Madrid", "Centro"),
+        ("San Sebastián de los Reyes", "Área urbana"),
+    }
+
+
 def test_country_is_requested_only_for_cross_country_ambiguity(
     tmp_path: Path,
 ) -> None:

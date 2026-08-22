@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Technical trace · Grupo Sazón{% endblock %}
 {% block body_class %}surface-page trace-page{% endblock %}
+{% block head %}<script defer src="{{ url_for('static', path='/trace.js') }}"></script>{% endblock %}
 {% block body %}
   <header class="surface-header">
     <a class="brand-lockup" href="/demo"><img src="{{ url_for('static', path='/logo.svg') }}" alt="" width="40" height="40"><div><strong>Grupo Sazón</strong><span>Developer trace · fictional demo</span></div></a>
@@ -10,6 +11,7 @@
     <div class="eyebrow">Development only · post-turn</div>
     <h1>LangGraph execution trace</h1>
     <p class="lede">This page shows the real nodes recorded from LangGraph update events for the latest completed turn. It is not a live stream.</p>
+    <p class="muted" id="trace-poll-status" data-trace-endpoint="/api/debug/conversations/{{ conversation_id }}/trace">Development polling refreshes this page after a newer completed turn is available.</p>
 
     <section class="surface-card trace-card" aria-labelledby="graph-title">
       <h2 id="graph-title">Static graph structure</h2>
@@ -27,6 +29,7 @@
           {% for node in trace.latest_turn.executed_nodes %}<code>{{ node }}</code>{% if not loop.last %}<span aria-hidden="true">→</span>{% endif %}{% endfor %}
         </div>
         <dl class="trace-facts">
+          <div><dt>Completed turn sequence</dt><dd>{{ trace.latest_turn.turn_sequence }}</dd></div>
           <div><dt>Route</dt><dd>{{ trace.latest_turn.route }}</dd></div>
           <div><dt>Stage</dt><dd>{{ trace.latest_turn.stage }}</dd></div>
           <div><dt>Status</dt><dd>{{ trace.latest_turn.status }}</dd></div>
@@ -36,7 +39,7 @@
           <div><dt>Recoverable error</dt><dd>{{ trace.latest_turn.recoverable_error_code or '—' }}</dd></div>
         </dl>
       {% else %}
-        <p class="muted">No completed candidate turn has a technical trace yet. Start the screening, send one answer, then refresh this page.</p>
+        <p class="muted">No completed candidate turn has a technical trace yet. Start the screening and send one answer; this post-turn view will refresh after completion.</p>
       {% endif %}
       <p class="privacy-note">{{ trace.privacy }}</p>
     </section>

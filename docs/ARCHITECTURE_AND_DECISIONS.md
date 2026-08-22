@@ -9,9 +9,9 @@ Phase 1 Process Design in `PROCESS_DESIGN.docx`.
 The current foundation provides configuration, structured domain contracts,
 deterministic eligibility rules, a health endpoint, asynchronous persistence,
 simulated ATS intake, a transient conversational workflow, synthetic service-area
-data, server-rendered demo surfaces, read-only operational analytics, and tests.
-Retrieval, voice, re-engagement, production authentication, and deployment remain
-planned.
+data, server-rendered demo surfaces, read-only operational analytics, a minimal
+ElevenLabs browser voice adapter, and tests. Retrieval, telephony, re-engagement,
+production authentication, and deployment remain planned.
 
 ## Five-layer separation
 
@@ -57,7 +57,7 @@ flowchart LR
 | Persistence | SQLAlchemy 2.x async with aiosqlite initially | Portable local demo path with a PostgreSQL upgrade route | Adopted for foundation |
 | Server-rendered UI | Jinja2 plus HTML/CSS/vanilla JavaScript | Lightweight accessible pages without a separate build system | Adopted for demo surfaces |
 | Retrieval | To be selected after approved content is available | Avoid premature knowledge architecture | Planned |
-| Voice | ElevenLabs integration | Candidate-initiated browser voice | Planned |
+| Voice | ElevenLabs widget plus authenticated webhook tool | Candidate-initiated browser voice over the shared conversation service | Adopted for minimal adapter |
 | Testing and linting | pytest, pytest-asyncio, and Ruff | Fast automated feedback | Adopted |
 
 These choices are intentionally provisional where integration behavior, scale, or
@@ -213,7 +213,9 @@ recorded execution path; `/api/debug/conversations/{conversation_id}/trace`
 returns the same data. The trace excludes transcript text, phone number, candidate
 name, structured screening fields, prompts, and model-generated explanations. It
 is an honest post-turn trace, not live SSE/WebSocket streaming. The routes are not
-registered when `APP_ENVIRONMENT=production`.
+registered when `APP_ENVIRONMENT=production`. In development, the page polls the
+privacy-safe JSON endpoint and reloads only after a newer completed turn appears;
+it does not expose in-progress execution.
 
 ### Deterministic qualification boundary
 

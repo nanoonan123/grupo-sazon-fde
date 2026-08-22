@@ -107,3 +107,41 @@ class ConversationTurnResponse(BaseModel):
     outcome: ScreeningStatus | None = None
     disqualification_reason: str | None = None
     selected_language: Language | None = None
+
+
+class VoiceTurnRequest(BaseModel):
+    """Validated candidate transcript received from the ElevenLabs tool."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=4000)
+    external_turn_id: str = Field(min_length=1, max_length=255)
+
+    @field_validator("text")
+    @classmethod
+    def reject_blank_voice_transcript(cls, value: str) -> str:
+        """Reject a blank transcript without altering the provider's exact text."""
+
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("external_turn_id")
+    @classmethod
+    def strip_external_turn_id(cls, value: str) -> str:
+        """Normalize the provider identifier used as an idempotency key."""
+
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("must not be blank")
+        return normalized
+
+
+class VoiceTurnResponse(BaseModel):
+    """Concise response intended for direct ElevenLabs tool consumption."""
+
+    assistant_message: str
+    status: ScreeningStatus
+    stage: ScreeningStage
+    terminal: bool
+    outcome: ScreeningStatus | None = None

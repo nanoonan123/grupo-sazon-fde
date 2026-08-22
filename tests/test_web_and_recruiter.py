@@ -186,7 +186,8 @@ def test_candidate_page_loads(tmp_path: Path) -> None:
     assert "candidate.js" in response.text
     assert "language-switch" not in response.text
     assert "interface-note" not in response.text
-    assert "you can reply in English" in response.text
+    assert "you can also reply in English" in response.text
+    assert "también puedes responder en español" in response.text
 
 
 def test_candidate_page_renders_persisted_history_after_refresh(
@@ -251,6 +252,7 @@ def test_demo_launcher_creates_application_and_candidate_link(
     assert "esta demo local no envía SMS ni WhatsApp" in response.text
     assert "Idempotency:" in response.text
     assert "Abrir panel de selección" in response.text
+    assert "Abrir screening por voz" in response.text
     assert "Abrir traza técnica" in response.text
     assert "Application ID" in response.text
     with sqlite3.connect(database_path) as connection:
@@ -260,6 +262,20 @@ def test_demo_launcher_creates_application_and_candidate_link(
         assert connection.execute(
             "SELECT COUNT(*) FROM inbound_events"
         ).fetchone()[0] == 1
+
+
+def test_demo_launcher_uses_recruiting_defaults_and_source_selector(
+    tmp_path: Path,
+) -> None:
+    with web_client(tmp_path) as (client, _):
+        response = client.get("/demo")
+
+    assert response.status_code == 200
+    assert "LI-GS-DEMO-0001" in response.text
+    assert "+34600123456" in response.text
+    assert '<option value="linkedin" selected>LinkedIn</option>' in response.text
+    for label in ("InfoJobs", "Careers page", "Referral", "Email"):
+        assert label in response.text
 
 
 def test_recruiter_list_filters_and_search(tmp_path: Path) -> None:
@@ -537,6 +553,9 @@ def test_recruiter_dashboard_loads_and_labels_baseline_separately(
     assert "ROI" not in response.text
     assert response.text.count('class="kpi-card') == 6
     assert "Salud operativa" in response.text
+    assert "Grupo Sazón · Internal HR" in response.text
+    assert "Panel interno de selección" in response.text
+    assert "Uso exclusivo del equipo de RRHH de Grupo Sazón" in response.text
 
 
 def test_development_trace_uses_real_nodes_and_excludes_candidate_pii(
@@ -569,9 +588,12 @@ def test_development_trace_uses_real_nodes_and_excludes_candidate_pii(
     ]
     assert trace["latest_turn"]["route"] == "ask_next_question"
     assert trace["latest_turn"]["stage"] == "driver_license"
+    assert trace["latest_turn"]["turn_sequence"] == 2
     serialized = json.dumps(trace)
     assert "Private Candidate" not in serialized
     assert "+34619999999" not in serialized
     assert page.status_code == 200
     assert "It is not a live stream" in page.text
+    assert "trace.js" in page.text
+    assert "after a newer completed turn" in page.text
     assert "generate_summary" in page.text

@@ -119,6 +119,7 @@ alone never constitutes a supported service area.
 With the API running, open:
 
 - Candidate mobile chat: `http://127.0.0.1:8000/screen/<conversation_id>`
+- Candidate voice page: `http://127.0.0.1:8000/voice/<conversation_id>`
 - Simulated ATS launcher: `http://127.0.0.1:8000/demo`
 - Recruiter operations dashboard: `http://127.0.0.1:8000/recruiter`
 - Optional post-turn technical trace:
@@ -127,11 +128,12 @@ With the API running, open:
 
 Suggested demo walkthrough:
 
-1. Open `/demo`, review the generated ATS fields, and create a demo application.
+1. Open `/demo`, review the pre-filled ATS fields, and create a demo application.
 2. Copy or open the candidate screening link returned by the launcher.
 3. Enter a full name to opt in, then answer the remaining screening criteria.
 4. Refresh the candidate page to verify that the complete transcript is restored.
-5. Open the technical trace after a turn to see the real LangGraph nodes executed.
+5. Open the technical trace to see the real LangGraph nodes after each completed
+   turn; the development page polls for a newer completed turn and refreshes.
 6. Open `/recruiter` to review measured demo KPIs, filters, candidate details,
    structured fields, transcript, and provider operations metadata.
 
@@ -146,6 +148,8 @@ static graph, latest executed nodes, route, stage, status, provider/model, laten
 and recoverable error code. It excludes candidate messages, phone/name, structured
 screening data, prompts, and model explanations. This is a post-turn trace—not a
 live stream—and its routes are omitted when `APP_ENVIRONMENT=production`.
+The development page uses lightweight polling only to notice a newly completed
+turn; it does not stream in-progress model or graph activity.
 
 ### Demo security limitations
 
@@ -175,8 +179,11 @@ privacy-safe LangGraph trace. Tests use
 
 Planned but not implemented: database migrations and production PostgreSQL
 deployment, production authentication, signed candidate links, retrieval-augmented
-generation (RAG), ElevenLabs webhook tools, re-engagement scheduling, and
-deployment automation.
+generation (RAG), re-engagement scheduling, telephony, and deployment automation.
+
+The minimal ElevenLabs widget and webhook-tool adapter is configured using
+[`docs/ELEVENLABS_CONFIGURATION.md`](docs/ELEVENLABS_CONFIGURATION.md). It delegates
+every transcript to the same database-backed conversation service used by text.
 
 The Phase 1 process specification remains in `docs/PROCESS_DESIGN.docx`. Technical
 boundaries and provisional choices are recorded in
