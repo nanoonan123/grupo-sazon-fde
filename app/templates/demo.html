@@ -50,9 +50,7 @@
         <label class="copy-field"><span data-copy-es="Enlace de candidatura" data-copy-en="Candidate link">Enlace de candidatura</span><input id="candidate-url" readonly value="{{ candidate_url }}"></label>
         <div class="button-row">
           <a class="primary-button" href="{{ candidate_url }}" target="_blank" rel="noopener" data-copy-es="Abrir screening de candidatura" data-copy-en="Open candidate screening">Abrir screening de candidatura</a>
-          <a class="secondary-button" href="{{ voice_url }}" target="_blank" rel="noopener" data-copy-es="Abrir screening por voz" data-copy-en="Open voice screening">Abrir screening por voz</a>
           <a class="secondary-button" href="/recruiter" data-copy-es="Abrir panel de selección" data-copy-en="Open recruiter dashboard">Abrir panel de selección</a>
-          {% if trace_enabled %}<a class="secondary-button" href="{{ trace_url }}" target="_blank" rel="noopener" data-copy-es="Abrir traza técnica" data-copy-en="Open technical trace">Abrir traza técnica</a>{% endif %}
           <button type="button" class="secondary-button" id="copy-link" data-copy-es="Copiar URL" data-copy-en="Copy candidate URL">Copiar URL</button>
         </div>
         <dl class="identifier-grid"><div><dt>Application ID</dt><dd>{{ result.application_id }}</dd></div><div><dt>Conversation ID</dt><dd>{{ result.conversation_id }}</dd></div></dl>

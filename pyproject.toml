@@ -21,6 +21,7 @@ dependencies = [
     "httpx",
     "python-multipart",
     "tenacity",
+    "tzdata",
 ]
 
 [project.optional-dependencies]

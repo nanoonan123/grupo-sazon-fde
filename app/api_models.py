@@ -145,3 +145,31 @@ class VoiceTurnResponse(BaseModel):
     stage: ScreeningStage
     terminal: bool
     outcome: ScreeningStatus | None = None
+
+
+class InterviewSlotRead(BaseModel):
+    """A candidate-local presentation of one available recruiter-contact slot."""
+
+    starts_at_utc: datetime
+    local_date: str
+    local_time: str
+    timezone: str
+
+
+class InterviewBookingRequest(BaseModel):
+    """The UTC slot chosen by a qualified candidate."""
+
+    slot_starts_at_utc: datetime
+
+
+class InterviewBookingRead(InterviewSlotRead):
+    """The persisted booking returned to candidate clients."""
+
+    booking_id: str
+
+
+class InterviewSlotsResponse(BaseModel):
+    """Available slots or the candidate's existing booking."""
+
+    slots: list[InterviewSlotRead]
+    booking: InterviewBookingRead | None = None

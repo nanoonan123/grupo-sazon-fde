@@ -61,7 +61,7 @@
   }
 
   function metricValue(name, value) {
-    if (["completion_rate", "qualification_rate"].includes(name)) {
+    if (["completion_rate", "qualification_rate", "interview_booking_rate"].includes(name)) {
       return `${(value * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
     }
     if (name === "average_completed_screening_duration_seconds") {
@@ -127,6 +127,7 @@
     const outcomeCell = document.createElement("td");
     outcomeCell.append(statusPill(item.outcome));
     row.append(outcomeCell);
+    row.append(el("td", "nowrap", item.interview_starts_at_utc ? new Intl.DateTimeFormat(document.documentElement.lang, { dateStyle: "medium", timeStyle: "short", timeZone: item.interview_timezone }).format(new Date(item.interview_starts_at_utc)) : "—"));
     row.append(el("td", "nowrap", new Intl.DateTimeFormat(document.documentElement.lang, { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.updated_at))));
     return row;
   }
@@ -135,7 +136,7 @@
     rowsElement.replaceChildren();
     const loadingRow = document.createElement("tr");
     const loadingCell = el("td", "empty-cell", english() ? "Loading applications…" : "Cargando candidaturas…");
-    loadingCell.colSpan = 7;
+    loadingCell.colSpan = 8;
     loadingRow.append(loadingCell);
     rowsElement.append(loadingRow);
     const formData = new FormData(filters);
@@ -148,7 +149,7 @@
       if (!payload.items.length) {
         const emptyRow = document.createElement("tr");
         const emptyCell = el("td", "empty-cell", english() ? "No matching applications." : "No hay candidaturas con estos filtros.");
-        emptyCell.colSpan = 7;
+        emptyCell.colSpan = 8;
         emptyRow.append(emptyCell);
         rowsElement.append(emptyRow);
       } else {
@@ -162,7 +163,7 @@
       rowsElement.replaceChildren();
       const errorRow = document.createElement("tr");
       const errorCell = el("td", "empty-cell", english() ? "Could not load applications." : "No se pudieron cargar las candidaturas.");
-      errorCell.colSpan = 7;
+      errorCell.colSpan = 8;
       errorRow.append(errorCell);
       rowsElement.append(errorRow);
     }
@@ -202,6 +203,7 @@
       [english() ? "Status" : "Estado", localized(labels.status[item.status]) || item.status],
       [english() ? "Outcome" : "Resultado", localized(labels.status[item.outcome]) || item.outcome],
       [english() ? "Progress" : "Progreso", `${item.progress_collected}/${item.progress_total}`],
+      [english() ? "Interview" : "Entrevista", item.interview_starts_at_utc ? new Intl.DateTimeFormat(document.documentElement.lang, { dateStyle: "full", timeStyle: "short", timeZone: item.interview_timezone }).format(new Date(item.interview_starts_at_utc)) + ` (${item.interview_timezone})` : "—"],
       [english() ? "Deterministic reason" : "Motivo determinista", payload.deterministic_reason],
       [english() ? "Escalation fields" : "Campos de escalado", payload.escalation_fields.join(", ") || "—"],
     ]);

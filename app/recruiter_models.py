@@ -22,6 +22,8 @@ class RecruiterApplicationItem(BaseModel):
     current_stage: str
     status: ScreeningStatus
     outcome: str | None
+    interview_starts_at_utc: datetime | None = None
+    interview_timezone: str | None = None
     updated_at: datetime
 
 
@@ -80,6 +82,7 @@ class RecruiterMetrics(BaseModel):
     deleted: int = 0
     completion_rate: float = 0
     qualification_rate: float = 0
+    interview_booking_rate: float = 0
     drop_off_by_current_stage: dict[str, int] = Field(default_factory=dict)
     average_completed_screening_duration_seconds: float = 0
     average_conversation_turns: float = 0

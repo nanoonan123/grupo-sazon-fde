@@ -57,7 +57,6 @@ class ScreeningGraphState(TypedDict):
     provider_model: str | None
     provider_latency_ms: int | None
     provider_error_code: str | None
-    debug_explanation: str | None
     current_date: date
 
 
@@ -84,6 +83,7 @@ FIELD_TO_STAGE = {
 
 KNOWN_CLARIFICATION_FIELDS = frozenset(FIELD_TO_STAGE)
 AVAILABILITY_CONFIRMATION_KEY = "availability_full_time_confirmation"
+GIVEN_NAME_PENDING_KEY = "given_name"
 
 
 def _latest_candidate_text(state: ScreeningGraphState) -> str:
@@ -391,7 +391,9 @@ def _merge_start_date(
         pending.pop("start_date", None)
         clarifications.add("start_date")
         return set()
-    if interpretation.start_date_is_relative or not interpretation.start_date_confirmed:
+    if not interpretation.start_date_confirmed and not (
+        interpretation.start_date_is_relative and proposed_date >= state["current_date"]
+    ):
         pending["start_date"] = proposed_date.isoformat()
         clarifications.add("start_date")
         return set()
@@ -439,7 +441,6 @@ def build_screening_graph(
             "provider_name": result.provider,
             "provider_model": result.model,
             "provider_latency_ms": result.latency_ms,
-            "debug_explanation": result.value.debug_explanation,
         }
 
     async def validate_and_merge(state: ScreeningGraphState) -> dict[str, object]:
@@ -454,6 +455,8 @@ def build_screening_graph(
             "pending_data": pending,
             "clarification_counts": counts,
         }
+        if interpretation.intent is CandidateIntent.VOICE_SWITCH:
+            return updates
         if interpretation.explicit_language_switch is not None:
             data.language = interpretation.explicit_language_switch
             counts.pop("language", None)
@@ -511,6 +514,31 @@ def build_screening_graph(
             and Availability.WEEKENDS in proposed_availability
         )
         validated_interpretation = interpretation
+        proposed_name = (interpretation.updates.full_name or "").strip()
+        name_parts = re.findall(r"[^\W_]+(?:['’-][^\W_]+)?", proposed_name)
+        pending_given_name = pending.get(GIVEN_NAME_PENDING_KEY)
+        if isinstance(pending_given_name, str) and pending_given_name and name_parts:
+            validated_interpretation = interpretation.model_copy(deep=True)
+            repeats_given_name = (
+                len(name_parts) > 1
+                and name_parts[0].casefold() == pending_given_name.casefold()
+            )
+            surname = " ".join(name_parts[1:]) if repeats_given_name else name_parts[-1]
+            validated_interpretation.updates.full_name = (
+                f"{pending_given_name} {surname.title()}"
+            )
+            pending.pop(GIVEN_NAME_PENDING_KEY, None)
+        elif proposed_name and len(name_parts) == 1:
+            validated_interpretation = interpretation.model_copy(deep=True)
+            if isinstance(pending_given_name, str) and pending_given_name:
+                validated_interpretation.updates.full_name = (
+                    f"{pending_given_name} {proposed_name}"
+                )
+                pending.pop(GIVEN_NAME_PENDING_KEY, None)
+            elif not interpretation.single_name_confirmed:
+                pending[GIVEN_NAME_PENDING_KEY] = proposed_name
+                validated_interpretation.updates.full_name = None
+                clarifications.discard("full_name")
         if requires_availability_confirmation and not (
             was_awaiting_availability_confirmation
         ):
@@ -595,6 +623,13 @@ def build_screening_graph(
                 "missing_fields": missing,
             }
         if interpretation is not None:
+            if interpretation.intent is CandidateIntent.VOICE_SWITCH:
+                return {
+                    "route": GraphRoute.ASK_NEXT_QUESTION,
+                    "status": ScreeningStatus.IN_PROGRESS,
+                    "stage": state["stage"],
+                    "missing_fields": _current_missing_fields(state),
+                }
             if interpretation.intent is CandidateIntent.DATA_DELETION:
                 return {
                     "route": GraphRoute.DATA_DELETION,
@@ -890,6 +925,27 @@ def _compose_candidate_response(
     """Compose a concise response constrained by the deterministic route."""
 
     spanish = str(language) == "es"
+    interpretation = state["interpretation"]
+    if (
+        interpretation is not None
+        and interpretation.intent is CandidateIntent.VOICE_SWITCH
+    ):
+        return (
+            "Claro. Pulsa «Continuar por voz» para seguir mediante una "
+            "conversación de voz."
+            if spanish
+            else (
+                "Of course. Select “Continue by voice” to continue with a voice "
+                "conversation."
+            )
+        )
+    pending_given_name = state["pending_data"].get(GIVEN_NAME_PENDING_KEY)
+    if isinstance(pending_given_name, str) and pending_given_name:
+        return (
+            f"Gracias, {pending_given_name}. ¿Cuál es tu apellido?"
+            if spanish
+            else f"Thank you, {pending_given_name}. What is your last name?"
+        )
     if state["provider_error_code"] is not None:
         return (
             "No pude procesar tu respuesta ahora. Inténtalo de nuevo en un momento."
@@ -917,16 +973,14 @@ def _compose_candidate_response(
         name = state["screening_data"].full_name or ""
         first_name = name.split()[0] if name.split() else ""
         return (
-            f"Gracias, {first_name}. Has completado el screening inicial y cumples "
-            "los requisitos básicos configurados para el puesto. El equipo de "
-            "selección de Grupo Sazón revisará tu candidatura y se pondrá en "
-            "contacto contigo para explicarte los siguientes pasos."
+            f"¡Enhorabuena, {first_name}! Cumples los requisitos básicos "
+            "configurados para el puesto. Elige cuándo prefieres que el equipo "
+            "de selección contacte contigo."
             if spanish
             else (
-                f"Thank you, {first_name}. You have completed the initial screening "
-                "and meet the configured basic requirements for the role. Grupo "
-                "Sazón's recruitment team will review your application and contact "
-                "you with the next steps."
+                f"Congratulations, {first_name}! You meet the configured basic "
+                "requirements for the role. Choose when you would prefer the "
+                "recruitment team to contact you."
             )
         )
     if route is GraphRoute.NEEDS_REVIEW:
@@ -1028,6 +1082,22 @@ def _compose_candidate_response(
                 "Are you looking for full-time or part-time work?"
             )
         )
+    if (
+        state["stage"] is ScreeningStage.DELIVERY_EXPERIENCE
+        and state["screening_data"].delivery_experience_years not in {None, 0}
+        and not state["screening_data"].delivery_platforms
+    ):
+        years = state["screening_data"].delivery_experience_years
+        label = int(years) if years.is_integer() else years
+        return (
+            f"De acuerdo, {label} años de experiencia. ¿Con qué plataforma, "
+            "restaurante o empresa trabajaste?"
+            if spanish
+            else (
+                f"Got it, {label} years of experience. Which platform, restaurant, "
+                "or company did you work with?"
+            )
+        )
     if state["turn_clarification_fields"]:
         prefix = (
             "No pude confirmar esa respuesta."
@@ -1073,5 +1143,4 @@ def to_workflow_result(state: ScreeningGraphState) -> WorkflowResult:
         llm_model=state["provider_model"],
         llm_latency_ms=state["provider_latency_ms"],
         recoverable_error_code=state["provider_error_code"],
-        debug_explanation=state["debug_explanation"],
     )

@@ -82,12 +82,11 @@ updates without transcript or structured candidate data.
 
 Automated tests cover the aliases, typo confirmation, partial-state merge, unknown
 confirmation, retry semantics, combined opt-in/name, language switching, terminal
-copy, UI boundaries, and post-turn trace privacy. Tests use the fake provider and
+copy and UI boundaries. Tests use the fake provider and
 make no external model calls.
 
 - Service areas remain fictional curated demo data, not researched Grupo Sazón
   operating sites; there is no geocoding or broad fuzzy acceptance.
-- The technical trace is post-turn, not live SSE/WebSocket streaming.
 - Data deletion records a deleted status but does not physically anonymize PII.
 - RAG, backend-connected voice, re-engagement, production authentication,
   deployment, and production analytics remain unimplemented.

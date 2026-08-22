@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.models import ScreeningStage
 from app.api_models import AtsApplicationRequest
-from app.conversation_service import start_persisted_conversation
 from app.database import (
     CandidateApplication,
     Conversation,
@@ -104,6 +103,14 @@ async def candidate_screen(
     selected_language = (
         ScreeningData.model_validate(record.data).language if record else None
     )
+    latest_assistant = next(
+        (
+            message.content
+            for message in reversed(messages)
+            if message.role == "assistant"
+        ),
+        "",
+    )
     return templates.TemplateResponse(
         request=request,
         name="candidate_chat.html",
@@ -121,43 +128,13 @@ async def candidate_screen(
             "conversation_status": conversation_status,
             "outcome": outcome,
             "terminal": conversation_status != ScreeningStatus.IN_PROGRESS.value,
+            "voice_enabled": bool(request.app.state.elevenlabs_agent_id),
+            "voice_agent_id": request.app.state.elevenlabs_agent_id,
+            "voice_first_message": latest_assistant,
         },
     )
 
 
-@router.get(
-    "/voice/{conversation_id}",
-    response_class=HTMLResponse,
-    name="voice_screen",
-)
-async def voice_screen(
-    request: Request,
-    conversation_id: str,
-    session: Session,
-) -> HTMLResponse:
-    """Render the official ElevenLabs widget over the shared conversation state."""
-
-    initial = await start_persisted_conversation(session, conversation_id)
-    _, _, _, messages = await _candidate_records(session, conversation_id)
-    latest_assistant_message = next(
-        message.content for message in reversed(messages) if message.role == "assistant"
-    )
-    language = initial.selected_language or Language.ES
-    agent_id: str | None = request.app.state.elevenlabs_agent_id
-    return templates.TemplateResponse(
-        request=request,
-        name="voice.html",
-        context={
-            "conversation_id": conversation_id,
-            "agent_id": agent_id,
-            "language": language.value,
-            "initial_message": latest_assistant_message,
-            "dynamic_variables": {
-                "conversation_id": conversation_id,
-                "language": language.value,
-            },
-        },
-    )
 
 
 def _demo_defaults() -> dict[str, str]:
@@ -181,7 +158,6 @@ async def demo_launcher(request: Request) -> HTMLResponse:
         context={
             "form": _demo_defaults(),
             "result": None,
-            "trace_enabled": request.app.state.trace_enabled,
         },
     )
 
@@ -219,19 +195,6 @@ async def create_demo_application(
     candidate_url = str(
         request.url_for("candidate_screen", conversation_id=result.conversation_id)
     )
-    voice_url = str(
-        request.url_for("voice_screen", conversation_id=result.conversation_id)
-    )
-    trace_url = (
-        str(
-            request.url_for(
-                "technical_trace",
-                conversation_id=result.conversation_id,
-            )
-        )
-        if request.app.state.trace_enabled
-        else None
-    )
     return templates.TemplateResponse(
         request=request,
         name="demo.html",
@@ -239,9 +202,6 @@ async def create_demo_application(
             "form": payload.model_dump(mode="json"),
             "result": result,
             "candidate_url": candidate_url,
-            "voice_url": voice_url,
-            "trace_enabled": request.app.state.trace_enabled,
-            "trace_url": trace_url,
         },
     )
 

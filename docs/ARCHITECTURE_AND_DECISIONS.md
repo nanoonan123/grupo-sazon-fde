@@ -32,7 +32,6 @@ flowchart LR
     ATS["Simulated ATS"] -->|idempotent intake| API["FastAPI application"]
     Candidate["Candidate web chat"] -->|start / messages| API
     Recruiter["Recruiter dashboard"] -->|read-only queries| API
-    Developer["Development trace"] -->|PII-safe post-turn view| API
     API <--> DB[("Authoritative SQL database")]
     API --> Graph["Transient LangGraph turn"]
     Graph --> LLM["OpenAI provider\ninterpret + terminal summary"]
@@ -199,24 +198,6 @@ screening state and the assistant message are committed together. This makes the
 database, rather than graph memory or LLM context, authoritative and avoids two
 competing recovery mechanisms.
 
-### Development trace and observability
-
-In non-production environments, the message route runs the compiled graph through
-`astream(..., stream_mode="updates")`. The API accumulates the names of nodes that
-actually emitted updates and derives final state from those same updates. It
-persists a compact trace on the assistant message: executed nodes, route, stage,
-terminal flag, status, provider/model, combined provider latency, and recoverable
-error code.
-
-`/debug/conversations/{conversation_id}` renders the static graph and latest
-recorded execution path; `/api/debug/conversations/{conversation_id}/trace`
-returns the same data. The trace excludes transcript text, phone number, candidate
-name, structured screening fields, prompts, and model-generated explanations. It
-is an honest post-turn trace, not live SSE/WebSocket streaming. The routes are not
-registered when `APP_ENVIRONMENT=production`. In development, the page polls the
-privacy-safe JSON endpoint and reloads only after a newer completed turn appears;
-it does not expose in-progress execution.
-
 ### Deterministic qualification boundary
 
 The LLM may propose facts and flag ambiguity, but it cannot select a stage, route,
@@ -301,7 +282,7 @@ the authoritative selected language so interface copy follows the conversation.
 | Demo launcher `/demo` | Evaluator | Simulates ATS intake through the same authoritative intake operation and generates a candidate link. It is not a recruiter workflow. |
 | Recruiter `/recruiter` and `/api/recruiter/*` | Operations evaluator | Read-only application lists, details, transcripts, outcomes, and measured metrics. It cannot change qualification state. |
 | ATS `/api/ats/*` | Simulated external system | Creates applications through idempotent, source-specific business identity rules. |
-| Developer `/docs`, `/health`, and `/debug/conversations/{id}` | Local developer/operator | API discovery, process health, and a non-production PII-safe post-turn graph trace, separate from candidate and recruiter experiences. |
+| Developer `/docs` and `/health` | Local developer/operator | API discovery and process health, separate from candidate and recruiter experiences. |
 
 The fictional terracotta, cream, and dark-green identity and its original local
 SVG make the demo coherent without copying restaurant branding or implying that
@@ -320,6 +301,7 @@ results for an empty database.
 | Screening completed | Records ending in a deterministic decision: qualified, disqualified, or needs review. Stopped and deleted records are reported separately. |
 | Completion rate | Screening completed divided by screening started; represented as a ratio from 0 to 1. |
 | Qualification rate | Qualified divided by screening completed; represented as a ratio from 0 to 1. |
+| Interview booking rate | Qualified applications with a persisted interview booking, divided by qualified applications. |
 | Stopped | Records with the existing `incomplete` outcome, presented as stopped in the recruiter read model. |
 | Deleted | Records with the `deleted` data-deletion outcome. |
 | Drop-off by current stage | Operational snapshot of in-progress and stopped non-completions. In-progress records use their persisted stage; stopped records use their first missing screening criterion. This is not proof of abandonment. |
@@ -333,6 +315,21 @@ client-stated baseline: approximately 200 applications per week, 60% of candidat
 not answering phone calls, and 80% of recruiter time spent on unqualified
 candidates. The baseline is context supplied by the client, not a measurement from
 this database. The UI makes no ROI or improvement claim.
+
+### Interview booking demo boundary
+
+Only candidates with a persisted `qualified` outcome can reserve a recruiter
+contact slot. The demo generates capacity-one 30-minute slots on Wednesday and
+Thursday, 10:00–14:00, in `Europe/Madrid` for Spain and
+`America/Mexico_City` for Mexico. Bookings are persisted in UTC with a unique
+country/slot constraint, then displayed in the candidate timezone. This reduces
+manual cold calls and drop-off without moving eligibility authority from the
+database and deterministic rules.
+
+The measured booking rate is available now. Time-to-book, recruiter calls avoided,
+and no-show rate are intended future operational metrics. Confirmation/reminder
+messages and recruiter-calendar synchronization are future improvements and are
+not implemented by this demo.
 
 ### Production authentication boundaries
 
@@ -349,7 +346,7 @@ Before production:
   privacy/retention review.
 
 FastAPI's Swagger UI remains enabled for local development at `/docs`. Routes are
-grouped under `ATS`, `Conversations`, `Recruiter`, `Developer`, and `Operations` so workflows
+grouped under `ATS`, `Conversations`, `Voice`, `Recruiter`, and `Operations` so workflows
 are discoverable without conflating their audiences. A production deployment must
 protect or disable interactive API documentation as part of environment hardening.
 

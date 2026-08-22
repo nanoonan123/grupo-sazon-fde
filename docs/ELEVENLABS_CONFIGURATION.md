@@ -1,5 +1,17 @@
 # ElevenLabs voice-channel configuration
 
+## Same-page voice transport
+
+Set the dashboard **First message** exactly to `{{voice_first_message}}`. Pass the
+non-secret dynamic variables `conversation_id`, `voice_first_message`, and
+`conversation_language`; use the voice-only widget in the candidate chat dialog.
+Configure the authenticated webhook tool against a public HTTPS FastAPI URL. Its
+secret header is configured in ElevenLabs, never in browser HTML or JavaScript.
+
+Use this dashboard instruction exactly:
+
+> You are the voice channel for Grupo Sazón’s screening backend. Do not decide screening questions, validation, eligibility or outcomes yourself. After every candidate utterance, call submit_screening_turn exactly once using the verbatim transcript. Wait for the tool result and speak its assistant_message exactly as returned. Do not add, remove, paraphrase or summarize information. If terminal is true, speak the returned message and end the conversation. Always follow the language used in assistant_message.
+
 This adapter uses the official ElevenLabs widget for speech input/output and one
 authenticated webhook tool for each candidate answer. ElevenLabs handles speech;
 the Grupo Sazón backend remains authoritative for conversation state, transcript

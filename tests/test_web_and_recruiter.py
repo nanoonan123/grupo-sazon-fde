@@ -225,7 +225,6 @@ def test_candidate_html_exposes_no_secret_prompt_or_internal_metadata(
         response = client.get(f"/screen/{application['conversation_id']}")
 
     assert "test-secret-that-must-not-appear" not in response.text
-    assert "debug_explanation" not in response.text
     assert "INTERPRETATION_INSTRUCTIONS" not in response.text
     assert "no_driver_license" not in response.text
 
@@ -252,8 +251,7 @@ def test_demo_launcher_creates_application_and_candidate_link(
     assert "esta demo local no envía SMS ni WhatsApp" in response.text
     assert "Idempotency:" in response.text
     assert "Abrir panel de selección" in response.text
-    assert "Abrir screening por voz" in response.text
-    assert "Abrir traza técnica" in response.text
+    assert "Abrir screening por voz" not in response.text
     assert "Application ID" in response.text
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
@@ -349,6 +347,7 @@ def test_empty_recruiter_metrics_return_zeros(tmp_path: Path) -> None:
         "deleted": 0,
         "completion_rate": 0,
         "qualification_rate": 0,
+        "interview_booking_rate": 0,
         "drop_off_by_current_stage": {},
         "average_completed_screening_duration_seconds": 0,
         "average_conversation_turns": 0,
@@ -556,44 +555,3 @@ def test_recruiter_dashboard_loads_and_labels_baseline_separately(
     assert "Grupo Sazón · Internal HR" in response.text
     assert "Panel interno de selección" in response.text
     assert "Uso exclusivo del equipo de RRHH de Grupo Sazón" in response.text
-
-
-def test_development_trace_uses_real_nodes_and_excludes_candidate_pii(
-    tmp_path: Path,
-) -> None:
-    interpretation = MessageInterpretation(
-        detected_language=Language.ES,
-        consent=None,
-        updates=ScreeningUpdates(full_name="Private Candidate"),
-    )
-    with web_client(tmp_path, [interpretation]) as (client, _):
-        application = intake(client, "trace-private", "+34619999999")
-        conversation_id = application["conversation_id"]
-        client.post(f"/api/conversations/{conversation_id}/start")
-        client.post(
-            f"/api/conversations/{conversation_id}/messages",
-            json={"text": "Private Candidate"},
-        )
-        response = client.get(f"/api/debug/conversations/{conversation_id}/trace")
-        page = client.get(f"/debug/conversations/{conversation_id}")
-
-    assert response.status_code == 200
-    trace = response.json()
-    assert trace["mode"] == "post_turn"
-    assert trace["latest_turn"]["executed_nodes"] == [
-        "interpret_message",
-        "validate_and_merge",
-        "determine_next_action",
-        "compose_response",
-    ]
-    assert trace["latest_turn"]["route"] == "ask_next_question"
-    assert trace["latest_turn"]["stage"] == "driver_license"
-    assert trace["latest_turn"]["turn_sequence"] == 2
-    serialized = json.dumps(trace)
-    assert "Private Candidate" not in serialized
-    assert "+34619999999" not in serialized
-    assert page.status_code == 200
-    assert "It is not a live stream" in page.text
-    assert "trace.js" in page.text
-    assert "after a newer completed turn" in page.text
-    assert "generate_summary" in page.text

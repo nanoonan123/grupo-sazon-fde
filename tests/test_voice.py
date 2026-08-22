@@ -203,7 +203,7 @@ def test_voice_turn_returns_terminal_outcome(tmp_path: Path) -> None:
     assert provider.summary_calls == 1
 
 
-def test_missing_agent_configuration_renders_message_without_crashing(
+def test_removed_voice_page_is_absent(
     tmp_path: Path,
 ) -> None:
     with voice_client(tmp_path, agent_id=None, tool_secret=None) as (
@@ -214,24 +214,22 @@ def test_missing_agent_configuration_renders_message_without_crashing(
         conversation_id = intake(client, "missing-config")
         response = client.get(f"/voice/{conversation_id}")
 
-    assert response.status_code == 200
-    assert "Configuración de desarrollo pendiente" in response.text
-    assert "ELEVENLABS_AGENT_ID" in response.text
-    assert "<elevenlabs-convai" not in response.text
+    assert response.status_code == 404
     assert provider.interpret_calls == 0
 
 
-def test_voice_page_embeds_official_widget_with_non_secret_variables(
+def test_candidate_page_embeds_official_widget_with_non_secret_variables(
     tmp_path: Path,
 ) -> None:
     with voice_client(tmp_path) as (client, _, _):
         conversation_id = intake(client, "widget")
-        response = client.get(f"/voice/{conversation_id}")
+        response = client.get(f"/screen/{conversation_id}")
 
     assert response.status_code == 200
     assert '<elevenlabs-convai' in response.text
     assert 'agent-id="agent_test_demo"' in response.text
     assert f'"conversation_id": "{conversation_id}"' in response.text
-    assert '"language": "es"' in response.text
+    assert '"conversation_language": "es"' in response.text
+    assert "override-first-message" not in response.text
     assert "https://unpkg.com/@elevenlabs/convai-widget-embed" in response.text
     assert VOICE_SECRET not in response.text

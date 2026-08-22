@@ -1,6 +1,5 @@
 """Shared persisted application service for every conversation transport."""
 
-import json
 from typing import cast
 
 from fastapi import HTTPException, status
@@ -259,7 +258,6 @@ def _graph_state(
         provider_model=None,
         provider_latency_ms=None,
         provider_error_code=None,
-        debug_explanation=None,
         current_date=utc_now().date(),
     )
 
@@ -302,14 +300,10 @@ async def process_persisted_turn(
 
     history = await _provider_history(session, conversation_id)
     transient_state = _graph_state(record, history)
-    completed_state = cast(ScreeningGraphState, dict(transient_state))
-    executed_nodes: list[str] = []
-    async for event in graph.astream(transient_state, stream_mode="updates"):
-        for node_name, node_updates in event.items():
-            if node_name.startswith("__") or not isinstance(node_updates, dict):
-                continue
-            executed_nodes.append(node_name)
-            completed_state.update(node_updates)
+    completed_state = cast(
+        ScreeningGraphState,
+        await graph.ainvoke(transient_state),
+    )
     result = to_workflow_result(completed_state)
 
     record.data = result.screening_data
@@ -349,20 +343,6 @@ async def process_persisted_turn(
         llm_model=result.llm_model,
         llm_latency_ms=result.llm_latency_ms,
         recoverable_error_code=result.recoverable_error_code,
-        debug_explanation=json.dumps(
-            {
-                "executed_nodes": executed_nodes,
-                "route": result.route.value,
-                "stage": result.stage.value,
-                "terminal": result.status in TERMINAL_STATUSES,
-                "status": result.status.value,
-                "provider": result.llm_provider,
-                "model": result.llm_model,
-                "provider_latency_ms": result.llm_latency_ms,
-                "recoverable_error_code": result.recoverable_error_code,
-            },
-            ensure_ascii=False,
-        ),
         created_at=utc_now(),
     )
     session.add(assistant)

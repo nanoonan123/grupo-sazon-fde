@@ -65,6 +65,8 @@
     </section>
 
     <section class="terminal-banner" id="terminal-banner" role="status" hidden></section>
+    <section class="booking-panel" id="booking-panel" aria-live="polite" hidden></section>
+    {% if voice_enabled %}<button class="voice-switch-action" type="button" id="open-voice" data-copy-es="Continuar por voz" data-copy-en="Continue by voice">🎙️ <span>Continuar por voz</span></button><dialog class="voice-dialog" id="voice-dialog"><button type="button" id="close-voice">×</button><p>Permite el acceso al micrófono cuando el navegador lo solicite.</p><elevenlabs-convai agent-id="{{ voice_agent_id }}" dynamic-variables='{{ {"conversation_id": conversation_id, "voice_first_message": voice_first_message, "conversation_language": ui_language} | tojson }}' variant="expanded"></elevenlabs-convai></dialog><script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>{% endif %}
     <section class="network-banner" id="network-banner" role="alert" hidden>
       <span data-copy-es="No pudimos conectar. Tu historial está guardado; inténtalo de nuevo." data-copy-en="We couldn't connect. Your history is saved; please try again.">No pudimos conectar. Tu historial está guardado; inténtalo de nuevo.</span>
       <button type="button" class="text-button" id="retry-button" data-copy-es="Reintentar" data-copy-en="Retry">Reintentar</button>

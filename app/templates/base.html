@@ -3,9 +3,10 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#a7462e">
+    <meta name="theme-color" content="#1f5a46">
     <title>{% block title %}Grupo Sazón · Demo ficticia{% endblock %}</title>
     <link rel="icon" href="{{ url_for('static', path='/logo.svg') }}" type="image/svg+xml">
+    <link rel="stylesheet" href="{{ url_for('static', path='/theme.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
     <script defer src="{{ url_for('static', path='/ui.js') }}"></script>
     {% block head %}{% endblock %}

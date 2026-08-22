@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import (
     CandidateApplication,
     Conversation,
+    InterviewBooking,
     Message,
     ScreeningRecord,
     get_session,
@@ -104,6 +105,7 @@ def _application_item(
     application: CandidateApplication,
     conversation: Conversation,
     record: ScreeningRecord | None,
+    booking: InterviewBooking | None = None,
 ) -> RecruiterApplicationItem:
     data = _screening_data(record)
     missing = _missing_fields(record)
@@ -120,19 +122,32 @@ def _application_item(
         current_stage=_current_stage(record, missing),
         status=ScreeningStatus(application.status),
         outcome=_display_outcome(record),
+        interview_starts_at_utc=(booking.slot_starts_at_utc if booking else None),
+        interview_timezone=booking.timezone if booking else None,
         updated_at=application.updated_at,
     )
 
 
 async def _application_rows(
     session: AsyncSession,
-) -> list[tuple[CandidateApplication, Conversation, ScreeningRecord | None]]:
+) -> list[
+    tuple[
+        CandidateApplication,
+        Conversation,
+        ScreeningRecord | None,
+        InterviewBooking | None,
+    ]
+]:
     result = await session.execute(
-        select(CandidateApplication, Conversation, ScreeningRecord)
+        select(CandidateApplication, Conversation, ScreeningRecord, InterviewBooking)
         .join(Conversation, Conversation.application_id == CandidateApplication.id)
         .outerjoin(
             ScreeningRecord,
             ScreeningRecord.application_id == CandidateApplication.id,
+        )
+        .outerjoin(
+            InterviewBooking,
+            InterviewBooking.application_id == CandidateApplication.id,
         )
         .order_by(
             CandidateApplication.updated_at.desc(),
@@ -157,8 +172,10 @@ async def list_recruiter_applications(
     """List applications using stable filters, search, sorting, and pagination."""
 
     items = [
-        _application_item(application, conversation, record)
-        for application, conversation, record in await _application_rows(session)
+        _application_item(application, conversation, record, booking)
+        for application, conversation, record, booking in await _application_rows(
+            session
+        )
     ]
     if application_status is not None:
         items = [item for item in items if item.status is application_status]
@@ -193,10 +210,20 @@ async def list_recruiter_applications(
 async def _application_detail_row(
     session: AsyncSession,
     application_id: str,
-) -> tuple[CandidateApplication, Conversation, ScreeningRecord | None]:
+) -> tuple[
+    CandidateApplication,
+    Conversation,
+    ScreeningRecord | None,
+    InterviewBooking | None,
+]:
     row = (
         await session.execute(
-            select(CandidateApplication, Conversation, ScreeningRecord)
+            select(
+                CandidateApplication,
+                Conversation,
+                ScreeningRecord,
+                InterviewBooking,
+            )
             .join(
                 Conversation,
                 Conversation.application_id == CandidateApplication.id,
@@ -205,12 +232,16 @@ async def _application_detail_row(
                 ScreeningRecord,
                 ScreeningRecord.application_id == CandidateApplication.id,
             )
+            .outerjoin(
+                InterviewBooking,
+                InterviewBooking.application_id == CandidateApplication.id,
+            )
             .where(CandidateApplication.id == application_id)
         )
     ).one_or_none()
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    return row[0], row[1], row[2]
+    return row[0], row[1], row[2], row[3]
 
 
 @router.get(
@@ -223,7 +254,7 @@ async def get_recruiter_application(
 ) -> RecruiterApplicationDetail:
     """Return structured data, transcript, outcome, and operational metadata."""
 
-    application, conversation, record = await _application_detail_row(
+    application, conversation, record, booking = await _application_detail_row(
         session,
         application_id,
     )
@@ -267,7 +298,7 @@ async def get_recruiter_application(
         None,
     )
     return RecruiterApplicationDetail(
-        application=_application_item(application, conversation, record),
+        application=_application_item(application, conversation, record, booking),
         screening_data=data,
         deterministic_reason=(record.disqualification_reason if record else None),
         candidate_summary=candidate_summary,
@@ -306,7 +337,8 @@ async def get_recruiter_metrics(session: Session) -> RecruiterMetrics:
     """Calculate operational metrics exclusively from persisted records."""
 
     rows = await _application_rows(session)
-    records = [record for _, _, record in rows if record is not None]
+    records = [record for _, _, record, _ in rows if record is not None]
+    bookings = [booking for _, _, _, booking in rows if booking is not None]
     messages = list((await session.scalars(select(Message))).all())
     record_statuses = [ScreeningStatus(record.status) for record in records]
     screening_started = len(records)
@@ -366,6 +398,9 @@ async def get_recruiter_metrics(session: Session) -> RecruiterMetrics:
             round(qualified / screening_completed, 4)
             if screening_completed
             else 0
+        ),
+        interview_booking_rate=(
+            round(len(bookings) / qualified, 4) if qualified else 0
         ),
         drop_off_by_current_stage=dict(sorted(drop_offs.items())),
         average_completed_screening_duration_seconds=(

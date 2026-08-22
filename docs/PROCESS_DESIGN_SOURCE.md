@@ -76,6 +76,21 @@ flowchart LR
 
 ### 4. Outcomes, recovery and boundaries
 
+**Current clarification behaviour.** Preserve useful partial information, acknowledge
+it, and ask a targeted clarification (closed alternatives where useful). Needs
+review occurs only after two genuinely failed targeted attempts. A single given
+name remains pending and asks for a surname; multi-part, hyphenated and apostrophe
+names are valid, and an explicitly confirmed legal single name is accepted.
+Explicit ES/EN requests or a clear sentence switch language; isolated words/names
+do not. Explicit voice requests keep the stage, data and retries unchanged and
+link to the same persisted voice workflow.
+
+**Interview and inactivity.** Qualified candidates receive a recruiter summary and
+may book a capacity-one Wed/Thu 10:00–14:00 local recruiter-contact slot. Partial
+state is persisted if a candidate stops. Proposed production reminders at 24h and
+72h and incomplete closure at seven days, plus calendar integration, are not
+implemented.
+
 - **Qualified:** all seven criteria valid, licence `yes`, supported service area,
   and no repeated-abuse rule. Completion is not a promise of interview or hire.
 - **Disqualified:** only `no_driver_license`, confirmed `outside_service_area`, or

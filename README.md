@@ -29,7 +29,7 @@ python -m uvicorn app.main:app --reload
 
 Open `http://127.0.0.1:8000/health`; it returns `{"status":"ok"}`. Local
 interactive API documentation is available at `http://127.0.0.1:8000/docs`,
-grouped under **ATS**, **Conversations**, **Recruiter**, **Developer**, and
+grouped under **ATS**, **Conversations**, **Voice**, **Recruiter**, and
 **Operations**. Production deployments must protect or disable interactive
 documentation.
 
@@ -119,11 +119,8 @@ alone never constitutes a supported service area.
 With the API running, open:
 
 - Candidate mobile chat: `http://127.0.0.1:8000/screen/<conversation_id>`
-- Candidate voice page: `http://127.0.0.1:8000/voice/<conversation_id>`
 - Simulated ATS launcher: `http://127.0.0.1:8000/demo`
 - Recruiter operations dashboard: `http://127.0.0.1:8000/recruiter`
-- Optional post-turn technical trace:
-  `http://127.0.0.1:8000/debug/conversations/<conversation_id>`
 - Developer API documentation: `http://127.0.0.1:8000/docs`
 
 Suggested demo walkthrough:
@@ -132,9 +129,7 @@ Suggested demo walkthrough:
 2. Copy or open the candidate screening link returned by the launcher.
 3. Enter a full name to opt in, then answer the remaining screening criteria.
 4. Refresh the candidate page to verify that the complete transcript is restored.
-5. Open the technical trace to see the real LangGraph nodes after each completed
-   turn; the development page polls for a newer completed turn and refreshes.
-6. Open `/recruiter` to review measured demo KPIs, filters, candidate details,
+5. Open `/recruiter` to review measured demo KPIs, filters, candidate details,
    structured fields, transcript, and provider operations metadata.
 
 The launcher is explicitly a simulated ATS delivery, not a recruiter workflow.
@@ -142,14 +137,6 @@ The dashboard separates metrics calculated from persisted synthetic records from
 the client-stated baseline of approximately 200 weekly applications, 60% missed
 phone contact, and 80% recruiter time spent on unqualified candidates. The demo
 does not claim ROI or business improvement.
-
-The optional trace uses actual LangGraph `updates` stream events. It shows the
-static graph, latest executed nodes, route, stage, status, provider/model, latency,
-and recoverable error code. It excludes candidate messages, phone/name, structured
-screening data, prompts, and model explanations. This is a post-turn trace—not a
-live stream—and its routes are omitted when `APP_ENVIRONMENT=production`.
-The development page uses lightweight polling only to notice a newly completed
-turn; it does not stream in-progress model or graph activity.
 
 ### Demo security limitations
 
@@ -168,22 +155,33 @@ python -m ruff check .
 
 ## Current and planned scope
 
+Qualified candidates can choose a recruiter-contact slot: Wednesday/Thursday,
+10:00–14:00 in the canonical Spain or Mexico timezone, with one booking per
+country/time slot. The database stores UTC and the UI displays local time. Calendar
+synchronization and confirmation/reminder workflows remain future work.
+
+Client reuse boundaries are service areas, copy, logo, and the semantic palette in
+`app/static/theme.css`; a deployment can override the palette without changing
+templates.
+
 Implemented now: project packaging, environment configuration, health endpoint,
 domain models, deterministic rules, asynchronous persistence, idempotent ATS
 application intake, resource retrieval, structured OpenAI interpretation, an
 explicit LangGraph workflow, deterministic response routing, synthetic data, and
 tests. The current slice also includes server-rendered candidate, ATS-demo, and
-recruiter surfaces, read-only database-backed analytics, and a development-only
-privacy-safe LangGraph trace. Tests use
+recruiter surfaces, read-only database-backed analytics, and qualified-candidate
+interview booking. Tests use
 `FakeScreeningProvider` and never call external APIs.
 
 Planned but not implemented: database migrations and production PostgreSQL
 deployment, production authentication, signed candidate links, retrieval-augmented
 generation (RAG), re-engagement scheduling, telephony, and deployment automation.
 
-The minimal ElevenLabs widget and webhook-tool adapter is configured using
-[`docs/ELEVENLABS_CONFIGURATION.md`](docs/ELEVENLABS_CONFIGURATION.md). It delegates
-every transcript to the same database-backed conversation service used by text.
+The browser-based ElevenLabs voice UI and authenticated backend turn adapter are
+implemented and adapter tests are network-free. A standalone ElevenLabs agent has
+been manually validated; end-to-end webhook synchronization needs a public HTTPS
+endpoint and is not enabled in the local submitted demo. See
+[`docs/ELEVENLABS_CONFIGURATION.md`](docs/ELEVENLABS_CONFIGURATION.md).
 
 The Phase 1 process specification remains in `docs/PROCESS_DESIGN.docx`. Technical
 boundaries and provisional choices are recorded in

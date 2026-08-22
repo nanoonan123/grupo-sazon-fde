@@ -12,10 +12,10 @@ from app.agent.workflow import build_screening_graph
 from app.config import Settings
 from app.conversation_routes import router as conversation_router
 from app.database import Database
+from app.interviews import router as interview_router
 from app.recruiter import router as recruiter_router
 from app.routes import router
 from app.service_areas import ServiceAreaCatalog
-from app.trace import router as trace_router
 from app.voice import router as voice_router
 from app.web import router as web_router
 
@@ -58,10 +58,6 @@ def create_app(
                 "name": "Recruiter",
                 "description": "Read-only applications and measured demo metrics.",
             },
-            {
-                "name": "Developer",
-                "description": "Development-only privacy-safe execution trace.",
-            },
         ],
     )
     application.state.database = Database(resolved_settings.database_url)
@@ -91,13 +87,10 @@ def create_app(
     )
     application.include_router(router)
     application.include_router(conversation_router)
+    application.include_router(interview_router)
     application.include_router(voice_router)
     application.include_router(recruiter_router)
     application.include_router(web_router)
-    trace_enabled = resolved_settings.app_environment.casefold() != "production"
-    application.state.trace_enabled = trace_enabled
-    if trace_enabled:
-        application.include_router(trace_router)
     application.mount(
         "/static",
         StaticFiles(directory=Path(__file__).parent / "static"),

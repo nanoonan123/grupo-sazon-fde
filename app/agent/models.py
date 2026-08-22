@@ -25,6 +25,7 @@ class CandidateIntent(StrEnum):
     OFF_TOPIC = "off_topic"
     DATA_DELETION = "data_deletion"
     STOP = "stop"
+    VOICE_SWITCH = "voice_switch"
 
 
 class ScreeningStage(StrEnum):
@@ -87,7 +88,7 @@ class MessageInterpretation(BaseModel):
     availability_full_time_confirmation_required: bool = False
     start_date_is_relative: bool = False
     start_date_confirmed: bool = False
-    debug_explanation: str = ""
+    single_name_confirmed: bool = False
 
 
 class SummaryOutput(BaseModel):
@@ -134,4 +135,3 @@ class WorkflowResult:
     llm_model: str | None
     llm_latency_ms: int | None
     recoverable_error_code: str | None
-    debug_explanation: str | None

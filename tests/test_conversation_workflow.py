@@ -36,7 +36,6 @@ def interpretation(
     availability_confirmation_required: bool = False,
     relative_date: bool = False,
     date_confirmed: bool = False,
-    explanation: str = "Test extraction.",
     **updates: object,
 ) -> MessageInterpretation:
     """Build one scripted structured interpretation."""
@@ -57,7 +56,6 @@ def interpretation(
         ),
         start_date_is_relative=relative_date,
         start_date_confirmed=date_confirmed,
-        debug_explanation=explanation,
     )
 
 
@@ -702,7 +700,7 @@ def test_spanish_happy_path(tmp_path: Path) -> None:
 
     assert first.json()["conversation_status"] == "in_progress"
     assert terminal.json()["outcome"] == "qualified"
-    assert "Gracias" in terminal.json()["assistant_message"]["content"]
+    assert "Enhorabuena" in terminal.json()["assistant_message"]["content"]
 
 
 def test_english_happy_path(tmp_path: Path) -> None:
@@ -731,9 +729,8 @@ def test_english_happy_path(tmp_path: Path) -> None:
     )
     assert terminal.json()["outcome"] == "qualified"
     assert terminal.json()["assistant_message"]["content"] == (
-        "Thank you, Alex. You have completed the initial screening and meet the "
-        "configured basic requirements for the role. Grupo Sazón's recruitment "
-        "team will review your application and contact you with the next steps."
+        "Congratulations, Alex! You meet the configured basic requirements for the "
+        "role. Choose when you would prefer the recruitment team to contact you."
     )
 
 
@@ -938,15 +935,14 @@ def test_past_start_date_requires_clarification(tmp_path: Path) -> None:
     assert json.loads(record["clarification_counts"]).get("start_date") is None
 
 
-def test_relative_start_date_requires_explicit_confirmation(tmp_path: Path) -> None:
+def test_high_confidence_relative_start_date_is_accepted(tmp_path: Path) -> None:
     start_on = future_date()
     relative = interpretation(
         relative_date=True,
         date_confirmed=False,
         **complete_updates(start_date=start_on),
     )
-    confirmed = interpretation(date_confirmed=True)
-    with screening_client(tmp_path, [relative, confirmed]) as (
+    with screening_client(tmp_path, [relative]) as (
         client,
         database_path,
         conversation_id,
@@ -954,12 +950,9 @@ def test_relative_start_date_requires_explicit_confirmation(tmp_path: Path) -> N
     ):
         start(client, conversation_id)
         first = send(client, conversation_id, "In about a month")
-        pending = json.loads(screening_row(database_path)["pending_data"])
-        terminal = send(client, conversation_id, "Yes, I confirm that date")
+        terminal = first
         data = json.loads(screening_row(database_path)["data"])
 
-    assert first.json()["conversation_status"] == "in_progress"
-    assert pending["start_date"] == start_on.isoformat()
     assert terminal.json()["outcome"] == "qualified"
     assert data["start_date"] == start_on.isoformat()
 

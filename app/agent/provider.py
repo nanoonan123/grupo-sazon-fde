@@ -44,6 +44,12 @@ candidate clearly asks to switch Spanish/English or explicitly selects one. A
 complete sentence may be detected in the other language, but never infer a switch
 from a name, location, slang, yes/no, or another isolated word.
 
+Explicitly requesting a language is a language switch, not voice. For example,
+"please speak in English", "háblame en inglés", and "can we continue in Spanish?"
+set explicit_language_switch and retain screening_answer intent. Use voice_switch
+only for an explicit voice-channel request such as "podemos hablar en vez de
+escribir?", "quiero continuar por voz", or "can I use the microphone?".
+
 The opening asks for the candidate's full name as the opt-in action. Set consent true
 when the candidate supplies a valid name to continue, including a bare name, and
 false for an explicit refusal. A response may contain consent and screening facts in
@@ -76,9 +82,12 @@ centro" and "Madrid around Sanse or the city centre" are ambiguous; Sanse means 
 Sebastián de los Reyes, while "el centro" in that phrase means Madrid Centro. The
 configured catalogue, not the model, decides whether either location is supported.
 
-The debug explanation must be a short factual extraction note, not hidden reasoning,
-personality analysis, sentiment scoring, or a qualification recommendation. Never
-use protected characteristics as screening information.
+Use voice_switch for explicit voice requests, including "¿Podemos hablar?",
+"Prefiero hacerlo por voz", "Can we speak instead?", and "I would rather use
+voice". A single-token name is incomplete unless the candidate explicitly confirms
+they legally use one name; set single_name_confirmed only for that confirmation.
+
+Never use protected characteristics as screening information.
 """.strip()
 
 SUMMARY_INSTRUCTIONS = """

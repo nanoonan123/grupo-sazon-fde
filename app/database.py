@@ -149,7 +149,6 @@ class Message(Base):
         String(64),
         nullable=True,
     )
-    debug_explanation: Mapped[str | None] = mapped_column(Text(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
 
 
@@ -241,6 +240,35 @@ class VoiceTurnReceipt(Base):
         JSON(),
         nullable=True,
     )
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
+
+
+class InterviewBooking(Base):
+    """One qualified-candidate recruiter-contact booking."""
+
+    __tablename__ = "interview_bookings"
+    __table_args__ = (
+        UniqueConstraint("application_id", name="uq_interview_booking_application"),
+        UniqueConstraint("conversation_id", name="uq_interview_booking_conversation"),
+        UniqueConstraint(
+            "country_code",
+            "slot_starts_at_utc",
+            name="uq_interview_booking_country_slot",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    application_id: Mapped[str] = mapped_column(
+        ForeignKey("candidate_applications.id", ondelete="CASCADE"),
+        index=True,
+    )
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        index=True,
+    )
+    country_code: Mapped[str] = mapped_column(String(8), index=True)
+    slot_starts_at_utc: Mapped[datetime] = mapped_column(UTCDateTime(), index=True)
+    timezone: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
 
 
