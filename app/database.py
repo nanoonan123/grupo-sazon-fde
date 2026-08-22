@@ -6,7 +6,17 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import Request
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, event
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    event,
+)
 from sqlalchemy.engine import Dialect
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -69,6 +79,13 @@ class CandidateApplication(Base):
     """Authoritative application received from an external ATS."""
 
     __tablename__ = "candidate_applications"
+    __table_args__ = (
+        UniqueConstraint(
+            "source",
+            "external_application_id",
+            name="uq_application_source_external_id",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     external_application_id: Mapped[str] = mapped_column(String(255), index=True)
@@ -108,14 +125,31 @@ class Message(Base):
     """Persisted message belonging to a conversation."""
 
     __tablename__ = "messages"
+    __table_args__ = (
+        UniqueConstraint(
+            "conversation_id",
+            "sequence_number",
+            name="uq_message_conversation_sequence",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     conversation_id: Mapped[str] = mapped_column(
         ForeignKey("conversations.id", ondelete="CASCADE"),
         index=True,
     )
+    sequence_number: Mapped[int] = mapped_column(Integer())
     role: Mapped[str] = mapped_column(String(32))
     content: Mapped[str] = mapped_column(Text())
+    message_type: Mapped[str] = mapped_column(String(32), default="turn")
+    llm_provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    llm_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    llm_latency_ms: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    recoverable_error_code: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+    debug_explanation: Mapped[str | None] = mapped_column(Text(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
 
 
@@ -131,7 +165,31 @@ class ScreeningRecord(Base):
         index=True,
     )
     status: Mapped[str] = mapped_column(String(32), index=True)
+    stage: Mapped[str] = mapped_column(String(64), index=True)
     data: Mapped[dict[str, Any]] = mapped_column(JSON(), default=dict)
+    pending_data: Mapped[dict[str, Any]] = mapped_column(JSON(), default=dict)
+    clarification_counts: Mapped[dict[str, Any]] = mapped_column(
+        JSON(),
+        default=dict,
+    )
+    abuse_count: Mapped[int] = mapped_column(Integer(), default=0)
+    service_area_supported: Mapped[bool | None] = mapped_column(
+        Boolean(),
+        nullable=True,
+    )
+    outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    disqualification_reason: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+    final_summary: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    llm_provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    llm_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    llm_latency_ms: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    recoverable_error_code: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime(),

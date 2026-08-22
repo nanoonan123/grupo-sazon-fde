@@ -1,6 +1,7 @@
 """Application configuration loaded from environment variables."""
 
 from pydantic import Field
+from pydantic.types import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,3 +19,7 @@ class Settings(BaseSettings):
     app_environment: str = "development"
     database_url: str = "sqlite+aiosqlite:///./data/grupo_sazon.db"
     ambiguity_retry_limit: int = Field(default=2, ge=1)
+    service_areas_path: str = "data/service_areas.json"
+    openai_api_key: SecretStr | None = None
+    openai_model: str = "gpt-5.6-luna"
+    openai_timeout_seconds: float = Field(default=8.0, ge=1.0, le=30.0)

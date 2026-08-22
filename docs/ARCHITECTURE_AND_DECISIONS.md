@@ -8,15 +8,15 @@ Phase 1 Process Design in `PROCESS_DESIGN.docx`.
 
 The current foundation provides configuration, structured domain contracts,
 deterministic eligibility rules, a health endpoint, asynchronous persistence,
-simulated ATS intake, synthetic service-area data, and tests. Conversation
-orchestration, model calls, retrieval, voice, and user-facing pages remain
-planned.
+simulated ATS intake, a transient conversational workflow, synthetic service-area
+data, and tests. Retrieval, voice, analytics, deployment, and user-facing pages
+remain planned.
 
 ## Five-layer separation
 
 | Layer | Responsibility | Boundary |
 | --- | --- | --- |
-| LLM | Understand candidate language, extract proposed values, and draft responses. | It does not decide eligibility or write authoritative state directly. |
+| LLM | Understand candidate language, extract proposed values, and draft terminal summaries. | It does not decide eligibility, choose stages, or write authoritative state directly. |
 | LangGraph | Manage conversation state and explicit transitions between screening stages. | It coordinates work but does not replace domain validation. |
 | Pydantic | Define and validate the structured contract shared by application layers. | It guarantees shape and basic constraints, not business outcomes. |
 | Domain rules | Validate completion and determine qualification from structured inputs. | It is deterministic and has no model dependency. |
@@ -35,8 +35,8 @@ before they can affect an outcome.
 | Configuration | Pydantic Settings | Typed environment-based configuration | Adopted |
 | Data contracts | Pydantic | Explicit validation at layer boundaries | Adopted |
 | Domain logic | Plain Python functions | Easy to test, audit, and keep deterministic | Adopted |
-| Orchestration | LangGraph | Explicit conversational state and transitions | Planned |
-| Model provider | OpenAI API | Language understanding and response generation | Planned |
+| Orchestration | LangGraph Graph API | Explicit transient nodes and conditional transitions | Adopted for screening core |
+| Model provider | Direct OpenAI Responses API with Structured Outputs | Typed interpretation without delegating decisions | Adopted behind provider boundary |
 | Persistence | SQLAlchemy 2.x async with aiosqlite initially | Portable local demo path with a PostgreSQL upgrade route | Adopted for foundation |
 | Server-rendered UI | Jinja2 plus HTML/CSS/JavaScript | Lightweight mobile web experience | Planned |
 | Retrieval | To be selected after approved content is available | Avoid premature knowledge architecture | Planned |
@@ -60,7 +60,7 @@ The persistence boundary currently contains five records:
   source, preferred language, and application status.
 - `Conversation` identifies the durable conversation associated one-to-one with
   an application.
-- `Message` provides durable conversation history storage for a future slice.
+- `Message` provides the complete durable user and assistant conversation history.
 - `ScreeningRecord` provides structured screening state independently of any LLM
   or orchestration context.
 - `InboundEvent` stores the webhook idempotency receipt and its application link.
@@ -78,6 +78,12 @@ Its payload digest is calculated from the validated, canonical JSON request:
 - The same key and digest returns the original identifiers with HTTP 200.
 - The same key with a different digest returns HTTP 409.
 
+`CandidateApplication` also has a database-level unique constraint on `(source,
+external_application_id)`. When that stable business identity arrives under a new
+delivery key, identical canonical candidate data creates only a new inbound-event
+receipt and returns the existing application. Conflicting phone or preferred
+language data returns HTTP 409.
+
 The unique constraint remains the final concurrency guard even when two deliveries
 race. The database is authoritative; LLM or future LangGraph state must never
 replace these persisted records as the source of truth.
@@ -86,6 +92,128 @@ FastAPI lifespan handling creates the local schema before serving requests and
 disposes the engine at shutdown. `create_all` is intentionally limited to this
 foundation. Versioned migrations, expected to use Alembic, are required before a
 production PostgreSQL deployment.
+
+## Conversational workflow decisions
+
+```mermaid
+flowchart TD
+    A["Interpret candidate message"] --> B["Validate and merge fields"]
+    B --> C["Determine next action"]
+    C -->|Missing information| D["Ask next question"]
+    C -->|Qualified| E["Qualified response"]
+    C -->|Disqualified| F["Disqualified response"]
+    C -->|Review, deletion or stop| G["Safe response"]
+    D --> H{"Terminal outcome?"}
+    E --> H
+    F --> H
+    G --> H
+    H -->|No| I["End current turn"]
+    H -->|Yes| J["Generate summary"]
+    J --> I
+```
+
+### Responses API and Pydantic Structured Outputs
+
+The production provider uses `AsyncOpenAI.responses.parse` with a Pydantic model
+passed through `text_format`. Structured Outputs are used because the application
+needs a typed interpretation boundary: proposed partial fields, detected language,
+ambiguity, clarification fields, candidate intent, abuse detection, and one short
+debug note. Schema conformance reduces parsing ambiguity, but the parsed object is
+still only a proposal that deterministic code must validate. The implementation
+follows the [official Structured Outputs guidance](https://developers.openai.com/api/docs/guides/structured-outputs).
+
+The direct OpenAI SDK is used instead of a LangChain model wrapper. This keeps the
+provider surface small, exposes Responses API parsing and errors directly, and
+avoids coupling domain behavior to an additional abstraction. A
+`ScreeningLLMProvider` protocol keeps production OpenAI access replaceable and
+allows all tests to use a network-free `FakeScreeningProvider`.
+
+The application constructs the OpenAI client lazily. `OPENAI_API_KEY` is read only
+through Pydantic Settings, and startup plus health checks work without it. The
+model defaults to configurable `OPENAI_MODEL=gpt-5.6-luna`. The model is an initial
+cost-and-latency hypothesis for a narrow, high-volume extraction task, not a final
+selection; representative evaluations must validate multilingual extraction,
+structured-output reliability, latency, and incorrect-decision risk. The
+[official model page](https://developers.openai.com/api/docs/models/gpt-5.6-luna)
+confirms Responses API and Structured Outputs support.
+
+### LangGraph Graph API without memory duplication
+
+The Graph API expresses five explicit nodes:
+
+1. `interpret_message`
+2. `validate_and_merge`
+3. `determine_next_action`
+4. `compose_response`
+5. `generate_summary`, reached only for terminal routes
+
+The decision node has conditional routes for `ask_next_question`, `qualified`,
+`disqualified`, `needs_review`, `data_deletion`, and `stopped`. All routes pass
+through constrained response composition; terminal routes then generate a
+recruiter summary. If summary generation fails, deterministic code persists a
+factual fallback.
+
+No LangGraph checkpointer is configured. Before every turn, the API persists the
+user message, loads the complete ordered message history and current
+`ScreeningRecord`, and reconstructs graph state. After the graph returns, validated
+screening state and the assistant message are committed together. This makes the
+database, rather than graph memory or LLM context, authoritative and avoids two
+competing recovery mechanisms.
+
+### Deterministic qualification boundary
+
+The LLM may propose facts and flag ambiguity, but it cannot select a stage, route,
+or outcome. Plain Python validates configured service areas, date semantics,
+clarification retries, and abuse counts before calling the existing eligibility
+rules. Availability, schedules, delivery experience, and start date are collected
+information rather than rejection criteria. Protected characteristics and
+sentiment are outside the structured contract and cannot affect selection.
+
+Candidate-facing responses are deterministic templates constrained by the route.
+This guarantees one primary question, prevents internal JSON/debug data from
+leaking, and provides a recruiter-handoff response for unapproved job questions
+until retrieval is implemented.
+
+### Consent and progress semantics
+
+Conversation start explains the screening purpose, expected duration, and
+available languages before requesting consent. Consent is persisted as process
+metadata in the authoritative screening record, but it is neither candidate data
+nor a qualification criterion. Declining consent produces the terminal
+`incomplete`/stopped route, never a disqualification.
+
+Progress has seven composite criteria: full name, driver's license, service area,
+availability, preferred schedule, delivery experience, and start date. Language
+selection and consent are excluded. Delivery experience is complete when the
+candidate confirms zero years, or when positive years and at least one platform
+are both present.
+
+### Service-area resolution
+
+Service-area eligibility is based on assignment city and zone. Country is optional
+when a configured city+zone pair identifies exactly one area; internal persistence
+uses canonical country codes (`ES` and `MX`). Country by itself is insufficient,
+and city by itself remains incomplete because the candidate must explicitly state
+a zone. Country is requested only when the same valid city+zone pair appears under
+multiple configured countries.
+
+The deterministic resolver normalizes case, surrounding whitespace, diacritics,
+and common punctuation or separators. It accepts only configured canonical values
+and aliases. It does not silently turn fuzzy text into an authoritative area. A
+single strong close match is stored only as pending confirmation and becomes
+authoritative after an explicit yes. An unknown location is disqualifying only
+after the candidate clearly confirms it. Otherwise, targeted clarification and
+the configured retry limit apply.
+
+The current Spain and Mexico entries are explicitly synthetic demo data, not
+researched Grupo Sazón service locations. The source and correction history are
+documented in `MANUAL_TEST_REPORT.md`.
+
+Provider attempts have a short configured timeout. Timeout, connection, and rate
+limit failures receive no more than two bounded exponential-backoff retries.
+Authentication and invalid-request errors are not retried. A remaining failure
+leaves screening fields unchanged and is persisted on the assistant error message
+and screening record with provider, model, latency, and error-code metadata.
 
 ## Frontend and agent language boundary
 
@@ -96,6 +224,11 @@ agent, structured validation, orchestration, and eligibility rules remain in
 Python behind the API. The frontend exchanges explicit request and response
 contracts with that backend and must not independently determine qualification.
 
+FastAPI's Swagger UI remains enabled for local development at `/docs`. Routes are
+grouped under `ATS`, `Conversations`, and `Operations` so the intake-to-screening
+flow is discoverable without a frontend. A production deployment must protect or
+disable interactive API documentation as part of its environment hardening.
+
 ## Immediate constraints
 
 - Service-area entries are synthetic demo configuration, not researched business
@@ -104,6 +237,7 @@ contracts with that backend and must not independently determine qualification.
 - Secrets belong in local environment variables and must never be committed.
 - The database is the source of truth for application, conversation, message,
   screening, and inbound-event records.
+- LangGraph state is reconstructed per turn and is never independently persisted.
 
 
 ## LLM Model Selection

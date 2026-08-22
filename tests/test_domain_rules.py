@@ -132,6 +132,29 @@ def test_zero_years_of_experience_is_valid() -> None:
     assert result.status is ScreeningStatus.QUALIFIED
 
 
+def test_positive_experience_requires_at_least_one_platform() -> None:
+    result = evaluate_eligibility(
+        EligibilityContext(
+            screening_data=complete_screening_data(delivery_platforms=[]),
+            service_area_supported=True,
+        )
+    )
+
+    assert result.status is ScreeningStatus.IN_PROGRESS
+    assert result.missing_fields == ["delivery_experience_years"]
+
+
+def test_language_is_not_an_eligibility_criterion() -> None:
+    result = evaluate_eligibility(
+        EligibilityContext(
+            screening_data=complete_screening_data(language=None),
+            service_area_supported=True,
+        )
+    )
+
+    assert result.status is ScreeningStatus.QUALIFIED
+
+
 def test_availability_and_schedule_accept_multiple_values() -> None:
     data = complete_screening_data(
         availability=[Availability.FULL_TIME, Availability.WEEKENDS],

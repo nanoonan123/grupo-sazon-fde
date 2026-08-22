@@ -8,15 +8,20 @@
     {
       "country_code": "ES",
       "country_name": "Spain",
+      "aliases": ["Espana", "España"],
       "areas": [
         {
           "city": "Madrid",
-          "zone": "Zona Centro Demo ES-01",
+          "city_aliases": [],
+          "zone": "Centro",
+          "zone_aliases": ["Madrid Centro", "Zona Centro", "Zona Centro Demo ES-01"],
           "demo_only": true
         },
         {
           "city": "Valencia",
-          "zone": "Zona Turia Demo ES-02",
+          "city_aliases": [],
+          "zone": "Turia",
+          "zone_aliases": ["Zona Turia", "Zona Turia Demo ES-02"],
           "demo_only": true
         }
       ]
@@ -24,15 +29,20 @@
     {
       "country_code": "MX",
       "country_name": "Mexico",
+      "aliases": ["México"],
       "areas": [
         {
           "city": "Mexico City",
-          "zone": "Zona Central Demo MX-01",
+          "city_aliases": ["Ciudad de Mexico", "Ciudad de México", "CDMX"],
+          "zone": "Central",
+          "zone_aliases": ["Zona Central", "Zona Central Demo MX-01"],
           "demo_only": true
         },
         {
           "city": "Guadalajara",
-          "zone": "Zona Poniente Demo MX-02",
+          "city_aliases": [],
+          "zone": "Poniente",
+          "zone_aliases": ["Zona Poniente", "Zona Poniente Demo MX-02"],
           "demo_only": true
         }
       ]

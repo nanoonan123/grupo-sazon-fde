@@ -4,6 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.agent.models import ScreeningStage
 from app.domain.models import Language, ScreeningStatus
 
 
@@ -59,3 +60,49 @@ class ConversationRead(BaseModel):
     status: ScreeningStatus
     created_at: datetime
     updated_at: datetime
+
+
+class CandidateMessageRequest(BaseModel):
+    """Validated candidate message accepted for one screening turn."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("text")
+    @classmethod
+    def strip_nonempty_message(cls, value: str) -> str:
+        """Normalize whitespace around a candidate message."""
+
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("must not be blank")
+        return normalized
+
+
+class MessageRead(BaseModel):
+    """Candidate-safe representation of one persisted message."""
+
+    message_id: str
+    role: str
+    content: str
+    created_at: datetime
+
+
+class ScreeningProgress(BaseModel):
+    """Deterministic progress through required screening information."""
+
+    current_stage: ScreeningStage
+    collected_fields: int
+    total_fields: int
+
+
+class ConversationTurnResponse(BaseModel):
+    """Candidate-safe result of starting or advancing a conversation."""
+
+    assistant_message: MessageRead
+    conversation_status: ScreeningStatus
+    progress: ScreeningProgress
+    missing_fields: list[str]
+    outcome: ScreeningStatus | None = None
+    disqualification_reason: str | None = None

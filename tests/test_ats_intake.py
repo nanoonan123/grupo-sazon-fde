@@ -9,6 +9,7 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 
+from app.agent.provider import FakeScreeningProvider
 from app.config import Settings
 from app.main import create_app
 
@@ -29,7 +30,7 @@ def api_client(tmp_path: Path) -> Iterator[tuple[TestClient, Path]]:
         database_url=f"sqlite+aiosqlite:///{database_path.as_posix()}",
         _env_file=None,
     )
-    with TestClient(create_app(settings)) as client:
+    with TestClient(create_app(settings, FakeScreeningProvider([]))) as client:
         yield client, database_path
 
 
@@ -96,6 +97,41 @@ def test_conflicting_idempotency_key_reuse(
     conflicting_payload = {**VALID_PAYLOAD, "phone_number": "+525500000000"}
 
     response = post_application(client, payload=conflicting_payload)
+
+    assert response.status_code == 409
+    assert row_count(database_path, "candidate_applications") == 1
+    assert row_count(database_path, "conversations") == 1
+    assert row_count(database_path, "inbound_events") == 1
+
+
+def test_same_business_identity_with_new_key_returns_existing_result(
+    api_client: tuple[TestClient, Path],
+) -> None:
+    client, database_path = api_client
+
+    first = post_application(client, key="delivery-one")
+    replay = post_application(client, key="delivery-two")
+
+    assert first.status_code == 201
+    assert replay.status_code == 200
+    assert replay.json() == first.json()
+    assert row_count(database_path, "candidate_applications") == 1
+    assert row_count(database_path, "conversations") == 1
+    assert row_count(database_path, "inbound_events") == 2
+
+
+def test_conflicting_business_identity_with_new_key_returns_conflict(
+    api_client: tuple[TestClient, Path],
+) -> None:
+    client, database_path = api_client
+    post_application(client, key="delivery-one")
+    conflicting_payload = {**VALID_PAYLOAD, "phone_number": "+525500000000"}
+
+    response = post_application(
+        client,
+        key="delivery-two",
+        payload=conflicting_payload,
+    )
 
     assert response.status_code == 409
     assert row_count(database_path, "candidate_applications") == 1

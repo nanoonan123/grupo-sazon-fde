@@ -25,7 +25,7 @@ from app.database import (
 )
 from app.domain.models import ScreeningStatus
 
-router = APIRouter(prefix="/api")
+router = APIRouter(prefix="/api", tags=["ATS"])
 Session = Annotated[AsyncSession, Depends(get_session)]
 IdempotencyKey = Annotated[
     str,
@@ -56,6 +56,36 @@ async def _conversation_for_application(
     )
 
 
+async def _application_for_business_id(
+    session: AsyncSession,
+    payload: AtsApplicationRequest,
+) -> CandidateApplication | None:
+    """Load an application by its stable source-specific ATS identity."""
+
+    return await session.scalar(
+        select(CandidateApplication).where(
+            CandidateApplication.source == payload.source,
+            CandidateApplication.external_application_id
+            == payload.external_application_id,
+        )
+    )
+
+
+def _business_payload_matches(
+    application: CandidateApplication,
+    payload: AtsApplicationRequest,
+) -> bool:
+    """Compare candidate data for an existing ATS business identifier."""
+
+    preferred_language = (
+        payload.preferred_language.value if payload.preferred_language else None
+    )
+    return (
+        application.phone_number == payload.phone_number
+        and application.preferred_language == preferred_language
+    )
+
+
 async def _existing_intake_result(
     session: AsyncSession,
     event: InboundEvent,
@@ -73,6 +103,42 @@ async def _existing_intake_result(
     conversation = await _conversation_for_application(session, event.application_id)
     if application is None or conversation is None:
         raise RuntimeError("Inbound event references incomplete persisted state")
+    return AtsApplicationResult(
+        application_id=application.id,
+        conversation_id=conversation.id,
+        status=application.status,
+        created_at=application.created_at,
+    )
+
+
+async def _record_business_identity_replay(
+    session: AsyncSession,
+    application: CandidateApplication,
+    payload: AtsApplicationRequest,
+    idempotency_key: str,
+    payload_hash: str,
+) -> AtsApplicationResult:
+    """Record a new delivery key for an existing identical application."""
+
+    if not _business_payload_matches(application, payload):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="ATS application identity conflicts with existing candidate data.",
+        )
+    conversation = await _conversation_for_application(session, application.id)
+    if conversation is None:
+        raise RuntimeError("Application is missing its persisted conversation")
+    session.add(
+        InboundEvent(
+            id=new_uuid(),
+            idempotency_key=idempotency_key,
+            payload_hash=payload_hash,
+            payload=payload.model_dump(mode="json"),
+            application_id=application.id,
+            created_at=utc_now(),
+        )
+    )
+    await session.commit()
     return AtsApplicationResult(
         application_id=application.id,
         conversation_id=conversation.id,
@@ -110,6 +176,17 @@ async def create_ats_application(
     if existing_event is not None:
         response.status_code = status.HTTP_200_OK
         return await _existing_intake_result(session, existing_event, digest)
+
+    existing_application = await _application_for_business_id(session, payload)
+    if existing_application is not None:
+        response.status_code = status.HTTP_200_OK
+        return await _record_business_identity_replay(
+            session,
+            existing_application,
+            payload,
+            normalized_key,
+            digest,
+        )
 
     application_id = new_uuid()
     conversation_id = new_uuid()
@@ -153,10 +230,20 @@ async def create_ats_application(
                 InboundEvent.idempotency_key == normalized_key
             )
         )
-        if concurrent_event is None:
+        if concurrent_event is not None:
+            response.status_code = status.HTTP_200_OK
+            return await _existing_intake_result(session, concurrent_event, digest)
+        concurrent_application = await _application_for_business_id(session, payload)
+        if concurrent_application is None:
             raise
         response.status_code = status.HTTP_200_OK
-        return await _existing_intake_result(session, concurrent_event, digest)
+        return await _record_business_identity_replay(
+            session,
+            concurrent_application,
+            payload,
+            normalized_key,
+            digest,
+        )
 
     return AtsApplicationResult(
         application_id=application.id,
