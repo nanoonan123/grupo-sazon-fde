@@ -1,19 +1,19 @@
 """Structured contracts for candidate screening."""
 
 from datetime import date
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class Language(str, Enum):
+class Language(StrEnum):
     """Supported conversation languages."""
 
     ES = "es"
     EN = "en"
 
 
-class DriverLicense(str, Enum):
+class DriverLicense(StrEnum):
     """Candidate driver-license response."""
 
     YES = "yes"
@@ -21,7 +21,7 @@ class DriverLicense(str, Enum):
     UNCLEAR = "unclear"
 
 
-class Availability(str, Enum):
+class Availability(StrEnum):
     """Supported availability options."""
 
     FULL_TIME = "full_time"
@@ -29,7 +29,7 @@ class Availability(str, Enum):
     WEEKENDS = "weekends"
 
 
-class Schedule(str, Enum):
+class Schedule(StrEnum):
     """Supported preferred schedules."""
 
     MORNING = "morning"
@@ -38,7 +38,7 @@ class Schedule(str, Enum):
     FLEXIBLE = "flexible"
 
 
-class ScreeningStatus(str, Enum):
+class ScreeningStatus(StrEnum):
     """Possible screening lifecycle outcomes."""
 
     IN_PROGRESS = "in_progress"
@@ -49,7 +49,7 @@ class ScreeningStatus(str, Enum):
     DELETED = "deleted"
 
 
-class DisqualificationReason(str, Enum):
+class DisqualificationReason(StrEnum):
     """Allowed deterministic disqualification reasons."""
 
     NO_DRIVER_LICENSE = "no_driver_license"
