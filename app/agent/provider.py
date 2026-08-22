@@ -40,13 +40,16 @@ schedule, and delivery-platform values. Zero delivery years is valid. Mark uncle
 invalid, or contradictory fields for clarification rather than guessing.
 
 Language detection is observational. Set explicit_language_switch only when the
-candidate clearly asks to switch Spanish/English or explicitly selects one. Never
-infer a switch from a name, location, slang, yes/no, or another isolated word.
+candidate clearly asks to switch Spanish/English or explicitly selects one. A
+complete sentence may be detected in the other language, but never infer a switch
+from a name, location, slang, yes/no, or another isolated word.
 
-Set consent only when the candidate accepts or rejects the initial screening
-invitation. A response may contain consent and screening facts in the same message;
-extract both. Set location_suggestion_confirmed only when the candidate clearly
-accepts or rejects the pending canonical location suggestion in the supplied context.
+The opening asks for the candidate's full name as the opt-in action. Set consent true
+when the candidate supplies a valid name to continue, including a bare name, and
+false for an explicit refusal. A response may contain consent and screening facts in
+the same message; extract both. Set location_suggestion_confirmed only when the
+candidate clearly accepts or rejects the pending canonical location suggestion in
+the supplied context.
 
 For locations, extract city and zone when stated; country is optional. Preserve the
 candidate's complete location wording in location_raw. Set

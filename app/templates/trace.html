@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Technical trace · Grupo Sazón{% endblock %}
+{% block body_class %}surface-page trace-page{% endblock %}
+{% block body %}
+  <header class="surface-header">
+    <a class="brand-lockup" href="/demo"><img src="{{ url_for('static', path='/logo.svg') }}" alt="" width="40" height="40"><div><strong>Grupo Sazón</strong><span>Developer trace · fictional demo</span></div></a>
+    <a class="secondary-button" href="/debug/conversations/{{ conversation_id }}">Refresh trace</a>
+  </header>
+  <main class="surface-main trace-layout">
+    <div class="eyebrow">Development only · post-turn</div>
+    <h1>LangGraph execution trace</h1>
+    <p class="lede">This page shows the real nodes recorded from LangGraph update events for the latest completed turn. It is not a live stream.</p>
+
+    <section class="surface-card trace-card" aria-labelledby="graph-title">
+      <h2 id="graph-title">Static graph structure</h2>
+      <ol class="trace-graph">
+        {% for node in trace.graph %}
+          <li><div><code>{{ node.node }}</code><span class="trace-kind">{{ node.kind }}</span></div><p>{{ node.description }}</p>{% if node.node == 'compose_response' %}<small>Non-terminal → END · terminal → generate_summary</small>{% endif %}</li>
+        {% endfor %}
+      </ol>
+    </section>
+
+    <section class="surface-card trace-card" aria-labelledby="latest-title">
+      <h2 id="latest-title">Latest completed turn</h2>
+      {% if trace.latest_turn %}
+        <div class="executed-path" aria-label="Nodes executed in order">
+          {% for node in trace.latest_turn.executed_nodes %}<code>{{ node }}</code>{% if not loop.last %}<span aria-hidden="true">→</span>{% endif %}{% endfor %}
+        </div>
+        <dl class="trace-facts">
+          <div><dt>Route</dt><dd>{{ trace.latest_turn.route }}</dd></div>
+          <div><dt>Stage</dt><dd>{{ trace.latest_turn.stage }}</dd></div>
+          <div><dt>Status</dt><dd>{{ trace.latest_turn.status }}</dd></div>
+          <div><dt>Terminal</dt><dd>{{ trace.latest_turn.terminal }}</dd></div>
+          <div><dt>Provider / model</dt><dd>{{ trace.latest_turn.provider or '—' }} / {{ trace.latest_turn.model or '—' }}</dd></div>
+          <div><dt>Total provider latency</dt><dd>{{ trace.latest_turn.provider_latency_ms if trace.latest_turn.provider_latency_ms is not none else '—' }}{% if trace.latest_turn.provider_latency_ms is not none %} ms{% endif %}</dd></div>
+          <div><dt>Recoverable error</dt><dd>{{ trace.latest_turn.recoverable_error_code or '—' }}</dd></div>
+        </dl>
+      {% else %}
+        <p class="muted">No completed candidate turn has a technical trace yet. Start the screening, send one answer, then refresh this page.</p>
+      {% endif %}
+      <p class="privacy-note">{{ trace.privacy }}</p>
+    </section>
+  </main>
+{% endblock %}

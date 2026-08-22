@@ -180,10 +180,9 @@ def test_conversation_start_is_idempotent(tmp_path: Path) -> None:
 
 def test_start_explains_process_and_progress_begins_at_zero(tmp_path: Path) -> None:
     expected = (
-        "Hola, soy el asistente virtual de selección de Grupo Sazón. "
-        "Hemos recibido tu candidatura para el puesto de repartidor/a. "
-        "Este breve screening dura unos 3 minutos y puedes responder en "
-        "español o inglés. ¿Te parece bien continuar?"
+        "Hola 👋 Hemos recibido tu candidatura para el puesto de repartidor/a "
+        "en Grupo Sazón. El screening dura unos 3 minutos. Para continuar, "
+        "¿cuál es tu nombre completo? Puedes responder en español or English."
     )
     with screening_client(tmp_path, []) as (client, _, conversation_id, _):
         response = start(client, conversation_id)
@@ -191,7 +190,7 @@ def test_start_explains_process_and_progress_begins_at_zero(tmp_path: Path) -> N
     body = response.json()
     assert body["assistant_message"]["content"] == expected
     assert body["progress"] == {
-        "current_stage": "consent",
+        "current_stage": "full_name",
         "collected_fields": 0,
         "total_fields": 7,
     }
@@ -216,6 +215,46 @@ def test_consent_acceptance_advances_to_full_name(tmp_path: Path) -> None:
         "total_fields": 7,
     }
     assert pending["consent_granted"] is True
+
+
+def test_bare_name_grants_opt_in_and_is_stored_in_same_turn(
+    tmp_path: Path,
+) -> None:
+    name = interpretation(consent=None, full_name="Michael Jackson")
+    with screening_client(tmp_path, [name]) as (
+        client,
+        database_path,
+        conversation_id,
+        _,
+    ):
+        start(client, conversation_id)
+        response = send(client, conversation_id, "Michael Jackson")
+        record = screening_row(database_path)
+        data = json.loads(record["data"])
+        pending = json.loads(record["pending_data"])
+
+    assert data["full_name"] == "Michael Jackson"
+    assert pending["consent_granted"] is True
+    assert response.json()["progress"]["collected_fields"] == 1
+    assert response.json()["progress"]["current_stage"] == "driver_license"
+
+
+def test_affirmative_name_grants_opt_in_and_is_stored(
+    tmp_path: Path,
+) -> None:
+    name = interpretation(consent=True, full_name="María Jackson")
+    with screening_client(tmp_path, [name]) as (
+        client,
+        database_path,
+        conversation_id,
+        _,
+    ):
+        start(client, conversation_id)
+        send(client, conversation_id, "Sí, soy María Jackson")
+        record = screening_row(database_path)
+
+    assert json.loads(record["data"])["full_name"] == "María Jackson"
+    assert json.loads(record["pending_data"])["consent_granted"] is True
 
 
 def test_consent_rejection_stops_without_disqualification(tmp_path: Path) -> None:
@@ -270,7 +309,7 @@ def test_language_switch_does_not_change_screening_progress(tmp_path: Path) -> N
 
     assert response.json()["progress"]["collected_fields"] == 0
     assert response.json()["progress"]["total_fields"] == 7
-    assert response.json()["progress"]["current_stage"] == "consent"
+    assert response.json()["progress"]["current_stage"] == "full_name"
 
 
 def test_real_spanish_location_is_accepted_and_canonicalized(tmp_path: Path) -> None:
@@ -352,6 +391,68 @@ def test_close_location_match_is_persisted_only_after_confirmation(
     assert after["location_zone"] == "Centro"
 
 
+def test_typo_then_zone_wording_does_not_exhaust_clarifications(
+    tmp_path: Path,
+) -> None:
+    typo = interpretation(
+        location_raw="madird city center",
+        location_city="Madrid",
+        location_zone="City Center",
+    )
+    zone_only = interpretation(
+        location_raw="city center",
+        location_zone="City Center",
+    )
+    with screening_client(tmp_path, [typo, zone_only]) as (
+        client,
+        database_path,
+        conversation_id,
+        _,
+    ):
+        start(client, conversation_id)
+        first = send(client, conversation_id, "madird city center")
+        first_record = screening_row(database_path)
+        second = send(client, conversation_id, "city center")
+        second_record = screening_row(database_path)
+
+    assert first.json()["assistant_message"]["content"] == (
+        "¿Te refieres a Madrid, zona Centro?"
+    )
+    assert json.loads(first_record["clarification_counts"]).get("service_area") is None
+    assert second.json()["conversation_status"] == "in_progress"
+    assert second.json()["outcome"] is None
+    assert json.loads(second_record["clarification_counts"])["service_area"] == 1
+
+
+def test_known_madrid_plus_city_center_resolves_supported_area(
+    tmp_path: Path,
+) -> None:
+    city = interpretation(location_raw="madrid", location_city="Madrid")
+    zone = interpretation(location_raw="city center", location_zone="City Center")
+    with screening_client(tmp_path, [city, zone]) as (
+        client,
+        database_path,
+        conversation_id,
+        _,
+    ):
+        start(client, conversation_id)
+        first = send(client, conversation_id, "madrid")
+        second = send(client, conversation_id, "city center")
+        record = screening_row(database_path)
+
+    assert first.json()["assistant_message"]["content"] == (
+        "¿En qué zona de Madrid trabajarías?"
+    )
+    data = json.loads(record["data"])
+    assert (data["location_country"], data["location_city"], data["location_zone"]) == (
+        "ES",
+        "Madrid",
+        "Centro",
+    )
+    assert record["service_area_supported"] == 1
+    assert "service_area" not in second.json()["missing_fields"]
+
+
 def test_unknown_location_disqualifies_only_after_confirmation(
     tmp_path: Path,
 ) -> None:
@@ -376,13 +477,15 @@ def test_unknown_location_disqualifies_only_after_confirmation(
     assert terminal.json()["disqualification_reason"] == "outside_service_area"
 
 
-def test_unresolved_location_reaches_retry_limit(tmp_path: Path) -> None:
+def test_unresolved_location_reaches_retry_limit_after_two_failed_follow_ups(
+    tmp_path: Path,
+) -> None:
     unknown = interpretation(
         location_raw="Un lugar desconocido",
         location_city="Desconocida",
         location_zone="Ninguna",
     )
-    with screening_client(tmp_path, [unknown, unknown]) as (
+    with screening_client(tmp_path, [unknown, unknown, unknown]) as (
         client,
         _,
         conversation_id,
@@ -390,9 +493,11 @@ def test_unresolved_location_reaches_retry_limit(tmp_path: Path) -> None:
     ):
         start(client, conversation_id)
         first = send(client, conversation_id, "Un lugar desconocido")
-        terminal = send(client, conversation_id, "Sigue siendo ese lugar")
+        second = send(client, conversation_id, "Sigue siendo ese lugar")
+        terminal = send(client, conversation_id, "Lo repito: ese lugar")
 
     assert first.json()["conversation_status"] == "in_progress"
+    assert second.json()["conversation_status"] == "in_progress"
     assert terminal.json()["outcome"] == "needs_review"
 
 
@@ -448,9 +553,13 @@ def test_english_happy_path(tmp_path: Path) -> None:
         initial = start(client, conversation_id)
         terminal = send(client, conversation_id, "Here is all my information")
 
-    assert "Is it okay to continue?" in initial.json()["assistant_message"]["content"]
+    assert "what is your full name?" in initial.json()["assistant_message"]["content"]
     assert terminal.json()["outcome"] == "qualified"
-    assert "Thank you" in terminal.json()["assistant_message"]["content"]
+    assert terminal.json()["assistant_message"]["content"] == (
+        "Thank you, Alex. You have completed the initial screening and meet the "
+        "configured basic requirements for the role. Grupo Sazón's recruitment "
+        "team will review your application and contact you with the next steps."
+    )
 
 
 def test_multiple_fields_in_one_answer(tmp_path: Path) -> None:
@@ -494,6 +603,28 @@ def test_explicit_code_switch_preserves_collected_state(tmp_path: Path) -> None:
     assert switched_data["language"] == "en"
     assert switched_data["full_name"] == "Ana López"
     assert switched_data["driver_license"] == "yes"
+
+
+def test_complete_sentence_can_switch_language_without_explicit_request(
+    tmp_path: Path,
+) -> None:
+    english_sentence = interpretation(
+        language=Language.EN,
+        explicit_switch=None,
+        driver_license=DriverLicense.YES,
+    )
+    with screening_client(tmp_path, [english_sentence]) as (
+        client,
+        database_path,
+        conversation_id,
+        _,
+    ):
+        start(client, conversation_id)
+        response = send(client, conversation_id, "I have a valid driver's license")
+        data = json.loads(screening_row(database_path)["data"])
+
+    assert data["language"] == "en"
+    assert response.json()["selected_language"] == "en"
 
 
 def test_driver_license_disqualification(tmp_path: Path) -> None:

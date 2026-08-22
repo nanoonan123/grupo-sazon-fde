@@ -9,8 +9,9 @@ Phase 1 Process Design in `PROCESS_DESIGN.docx`.
 The current foundation provides configuration, structured domain contracts,
 deterministic eligibility rules, a health endpoint, asynchronous persistence,
 simulated ATS intake, a transient conversational workflow, synthetic service-area
-data, and tests. Retrieval, voice, analytics, deployment, and user-facing pages
-remain planned.
+data, server-rendered demo surfaces, read-only operational analytics, and tests.
+Retrieval, voice, re-engagement, production authentication, and deployment remain
+planned.
 
 ## Five-layer separation
 
@@ -26,6 +27,22 @@ This separation keeps probabilistic interpretation outside the decision boundary
 Extracted values must pass through the structured contract and deterministic rules
 before they can affect an outcome.
 
+```mermaid
+flowchart LR
+    ATS["Simulated ATS"] -->|idempotent intake| API["FastAPI application"]
+    Candidate["Candidate web chat"] -->|start / messages| API
+    Recruiter["Recruiter dashboard"] -->|read-only queries| API
+    Developer["Development trace"] -->|PII-safe post-turn view| API
+    API <--> DB[("Authoritative SQL database")]
+    API --> Graph["Transient LangGraph turn"]
+    Graph --> LLM["OpenAI provider\ninterpret + terminal summary"]
+    Graph --> Resolver["Python catalogue resolver"]
+    Graph --> Rules["Deterministic domain rules"]
+    Resolver --> Graph
+    Rules --> Graph
+    Graph --> API
+```
+
 ## Provisional technology decisions
 
 | Concern | Provisional choice | Rationale | Status |
@@ -38,7 +55,7 @@ before they can affect an outcome.
 | Orchestration | LangGraph Graph API | Explicit transient nodes and conditional transitions | Adopted for screening core |
 | Model provider | Direct OpenAI Responses API with Structured Outputs | Typed interpretation without delegating decisions | Adopted behind provider boundary |
 | Persistence | SQLAlchemy 2.x async with aiosqlite initially | Portable local demo path with a PostgreSQL upgrade route | Adopted for foundation |
-| Server-rendered UI | Jinja2 plus HTML/CSS/JavaScript | Lightweight mobile web experience | Planned |
+| Server-rendered UI | Jinja2 plus HTML/CSS/vanilla JavaScript | Lightweight accessible pages without a separate build system | Adopted for demo surfaces |
 | Retrieval | To be selected after approved content is available | Avoid premature knowledge architecture | Planned |
 | Voice | ElevenLabs integration | Candidate-initiated browser voice | Planned |
 | Testing and linting | pytest, pytest-asyncio, and Ruff | Fast automated feedback | Adopted |
@@ -97,20 +114,42 @@ production PostgreSQL deployment.
 
 ```mermaid
 flowchart TD
-    A["Interpret candidate message"] --> B["Validate and merge fields"]
-    B --> C["Determine next action"]
-    C -->|Missing information| D["Ask next question"]
-    C -->|Qualified| E["Qualified response"]
-    C -->|Disqualified| F["Disqualified response"]
-    C -->|Review, deletion or stop| G["Safe response"]
-    D --> H{"Terminal outcome?"}
-    E --> H
-    F --> H
-    G --> H
-    H -->|No| I["End current turn"]
-    H -->|Yes| J["Generate summary"]
-    J --> I
+    START --> I["interpret_message\nLLM: understanding + proposed extraction"]
+    I --> V["validate_and_merge\nDeterministic Python validation"]
+    V --> D["determine_next_action\nDeterministic domain rules"]
+    D -->|ask_next_question| C["compose_response\nControlled candidate copy"]
+    D -->|qualified / disqualified / needs_review| C
+    D -->|data_deletion / stopped| C
+    C -->|non-terminal| END
+    C -->|terminal| S["generate_summary\nLLM; deterministic fallback on failure"]
+    S --> END
 ```
+
+This diagram mirrors the compiled graph in `app/agent/workflow.py`. All six route
+values leave `determine_next_action` through `compose_response`; only
+`ask_next_question` ends directly after composition. Every terminal route reaches
+`generate_summary`, with deletion using the deterministic fallback directly.
+
+### Why LangGraph
+
+A plain Python state machine could support the current bounded sequence and would
+be a reasonable lower-dependency choice. LangGraph is not required to make the
+eligibility logic correct, and the domain rules deliberately remain ordinary
+Python so they can be audited and tested without the framework.
+
+LangGraph is still useful because it makes state, node boundaries, transitions,
+terminal branching, and LLM-versus-deterministic responsibilities explicit. The
+compiled graph is straightforward to test with a fake provider, and its real
+update stream supplies observability without fabricating execution steps. It also
+gives a controlled extension point for future human-in-the-loop review or
+re-engagement branches without moving those decisions into prompts.
+
+The implementation follows the official [Graph API](https://docs.langchain.com/oss/python/langgraph/graph-api)
+and [streaming](https://docs.langchain.com/oss/python/langgraph/streaming)
+concepts. [LangSmith Studio](https://docs.langchain.com/langsmith/studio) and
+LangGraph Agent Server are not runtime dependencies in this slice: they would add
+deployment and operational surface beyond what the local assignment needs. Studio
+may be evaluated later as development tooling, but the demo does not depend on it.
 
 ### Responses API and Pydantic Structured Outputs
 
@@ -160,6 +199,22 @@ screening state and the assistant message are committed together. This makes the
 database, rather than graph memory or LLM context, authoritative and avoids two
 competing recovery mechanisms.
 
+### Development trace and observability
+
+In non-production environments, the message route runs the compiled graph through
+`astream(..., stream_mode="updates")`. The API accumulates the names of nodes that
+actually emitted updates and derives final state from those same updates. It
+persists a compact trace on the assistant message: executed nodes, route, stage,
+terminal flag, status, provider/model, combined provider latency, and recoverable
+error code.
+
+`/debug/conversations/{conversation_id}` renders the static graph and latest
+recorded execution path; `/api/debug/conversations/{conversation_id}/trace`
+returns the same data. The trace excludes transcript text, phone number, candidate
+name, structured screening fields, prompts, and model-generated explanations. It
+is an honest post-turn trace, not live SSE/WebSocket streaming. The routes are not
+registered when `APP_ENVIRONMENT=production`.
+
 ### Deterministic qualification boundary
 
 The LLM may propose facts and flag ambiguity, but it cannot select a stage, route,
@@ -177,9 +232,10 @@ until retrieval is implemented.
 ### Consent and progress semantics
 
 Conversation start explains the screening purpose, expected duration, and
-available languages before requesting consent. Consent is persisted as process
-metadata in the authoritative screening record, but it is neither candidate data
-nor a qualification criterion. Declining consent produces the terminal
+available languages, then asks for the full name as the opt-in action. A valid
+name—alone or in an affirmative sentence—grants continuation consent and is
+stored in the same turn. Consent remains process metadata rather than a
+qualification criterion. Explicit refusal produces the terminal
 `incomplete`/stopped route, never a disqualification.
 
 Progress has seven composite criteria: full name, driver's license, service area,
@@ -198,12 +254,15 @@ a zone. Country is requested only when the same valid city+zone pair appears und
 multiple configured countries.
 
 The deterministic resolver normalizes case, surrounding whitespace, diacritics,
-and common punctuation or separators. It accepts only configured canonical values
-and aliases. It does not silently turn fuzzy text into an authoritative area. A
-single strong close match is stored only as pending confirmation and becomes
-authoritative after an explicit yes. An unknown location is disqualifying only
-after the candidate clearly confirms it. Otherwise, targeted clarification and
-the configured retry limit apply.
+and common punctuation or separators. Explicit Spanish/English aliases cover
+common word orders such as `Madrid centro`, `madrid city center`, `downtown
+Madrid`, `CDMX centro`, and `downtown Mexico City`. A new raw answer is matched
+against the catalogue and may be combined with previously validated partial state;
+normalized LLM proposals cannot silently correct approximate candidate wording.
+A strong unique typo becomes a pending suggestion and requires explicit
+confirmation. An unknown location is disqualifying only after confirmation.
+Clarification counters advance only when a candidate fails a requested follow-up,
+not when the resolver creates an initial incomplete/suggestion state.
 
 The current Spain and Mexico entries are explicitly synthetic demo data, not
 researched Grupo Sazón service locations. The source and correction history are
@@ -217,17 +276,80 @@ and screening record with provider, model, latency, and error-code metadata.
 
 ## Frontend and agent language boundary
 
-The browser experience may use HTML, CSS, and JavaScript because those are the
-native technologies for accessible interaction, responsive layout, and optional
-browser media controls. This does not move agent policy into the browser. The core
-agent, structured validation, orchestration, and eligibility rules remain in
-Python behind the API. The frontend exchanges explicit request and response
-contracts with that backend and must not independently determine qualification.
+The demo uses server-rendered Jinja templates, local CSS, and vanilla JavaScript.
+This provides responsive, accessible browser experiences without adding a Node.js
+toolchain, client framework, duplicated routing layer, or a second application
+runtime. Jinja renders persisted initial state and history; JavaScript handles
+progressive interactions with the existing API endpoints.
+
+This does not move agent policy into the browser. OpenAI access, graph execution,
+structured validation, orchestration, and eligibility rules remain in Python
+behind the API. The candidate page invokes the existing idempotent conversation
+start and message endpoints rather than reimplementing workflow logic. It has no
+manual language selector: the ATS preference selects the opening, explicit switch
+requests always switch, and a sentence-level detected change may switch while
+names, locations, and isolated foreign words do not. The response contract returns
+the authoritative selected language so interface copy follows the conversation.
+
+### Surface separation
+
+| Surface | Audience | Data and mutation boundary |
+| --- | --- | --- |
+| Candidate `/screen/{conversation_id}` | One candidate | Candidate-safe transcript and progress; may start and advance only its conversation in this local demo. It never renders prompts, reason codes, model metadata, or structured internal state. |
+| Demo launcher `/demo` | Evaluator | Simulates ATS intake through the same authoritative intake operation and generates a candidate link. It is not a recruiter workflow. |
+| Recruiter `/recruiter` and `/api/recruiter/*` | Operations evaluator | Read-only application lists, details, transcripts, outcomes, and measured metrics. It cannot change qualification state. |
+| ATS `/api/ats/*` | Simulated external system | Creates applications through idempotent, source-specific business identity rules. |
+| Developer `/docs`, `/health`, and `/debug/conversations/{id}` | Local developer/operator | API discovery, process health, and a non-production PII-safe post-turn graph trace, separate from candidate and recruiter experiences. |
+
+The fictional terracotta, cream, and dark-green identity and its original local
+SVG make the demo coherent without copying restaurant branding or implying that
+Grupo Sazón is a real organization.
+
+### Analytics definitions and baseline separation
+
+Recruiter metrics are calculated on request from authoritative applications,
+screening records, and messages. They are not hardcoded and return zero-valued
+results for an empty database.
+
+| Metric | Definition |
+| --- | --- |
+| Total applications | All persisted `CandidateApplication` rows. |
+| Screening started | Applications with a persisted `ScreeningRecord`, created by conversation start. |
+| Screening completed | Records ending in a deterministic decision: qualified, disqualified, or needs review. Stopped and deleted records are reported separately. |
+| Completion rate | Screening completed divided by screening started; represented as a ratio from 0 to 1. |
+| Qualification rate | Qualified divided by screening completed; represented as a ratio from 0 to 1. |
+| Stopped | Records with the existing `incomplete` outcome, presented as stopped in the recruiter read model. |
+| Deleted | Records with the `deleted` data-deletion outcome. |
+| Drop-off by current stage | Operational snapshot of in-progress and stopped non-completions. In-progress records use their persisted stage; stopped records use their first missing screening criterion. This is not proof of abandonment. |
+| Average completed duration | Mean seconds from screening-record creation to terminal update for qualified, disqualified, and needs-review records when timestamps are ordered. |
+| Average conversation turns | Persisted candidate (`user`) messages divided by screenings started. |
+| Recoverable-error count | Persisted messages with a non-null recoverable provider error code. |
+| P50 provider latency | Median of non-null persisted message-level provider latencies. |
+
+Measured synthetic demo results are visually and semantically separate from the
+client-stated baseline: approximately 200 applications per week, 60% of candidates
+not answering phone calls, and 80% of recruiter time spent on unqualified
+candidates. The baseline is context supplied by the client, not a measurement from
+this database. The UI makes no ROI or improvement claim.
+
+### Production authentication boundaries
+
+The current pages are intentionally unauthenticated for local evaluation only.
+Before production:
+
+- Recruiter pages and APIs require authenticated identities, authorization, and
+  role-based access control.
+- Candidate links require signed, scoped, expiring tokens rather than bare UUIDs.
+- ATS intake requires verified webhook signatures or narrowly scoped credentials,
+  replay controls, and appropriate rate limits.
+- Swagger must be protected or disabled, and the application requires transport
+  security, CSRF decisions for form surfaces, secure headers, audit controls, and
+  privacy/retention review.
 
 FastAPI's Swagger UI remains enabled for local development at `/docs`. Routes are
-grouped under `ATS`, `Conversations`, and `Operations` so the intake-to-screening
-flow is discoverable without a frontend. A production deployment must protect or
-disable interactive API documentation as part of its environment hardening.
+grouped under `ATS`, `Conversations`, `Recruiter`, `Developer`, and `Operations` so workflows
+are discoverable without conflating their audiences. A production deployment must
+protect or disable interactive API documentation as part of environment hardening.
 
 ## Immediate constraints
 
@@ -238,6 +360,7 @@ disable interactive API documentation as part of its environment hardening.
 - The database is the source of truth for application, conversation, message,
   screening, and inbound-event records.
 - LangGraph state is reconstructed per turn and is never independently persisted.
+- Demo authentication boundaries are documentation, not implemented controls.
 
 
 ## LLM Model Selection

@@ -1,5 +1,6 @@
 """Conversation start and message-processing HTTP routes."""
 
+import json
 from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -38,11 +39,11 @@ from app.domain.models import (
     ScreeningData,
     ScreeningStatus,
 )
-from app.domain.rules import missing_required_fields
+from app.domain.rules import SCREENING_CRITERIA_COUNT, missing_required_fields
 
 router = APIRouter(prefix="/api/conversations", tags=["Conversations"])
 Session = Annotated[AsyncSession, Depends(get_session)]
-REQUIRED_FIELD_COUNT = 7
+REQUIRED_FIELD_COUNT = SCREENING_CRITERIA_COUNT
 TERMINAL_STATUSES = {
     ScreeningStatus.QUALIFIED,
     ScreeningStatus.DISQUALIFIED,
@@ -147,24 +148,23 @@ def _turn_response(
         missing_fields=missing_fields,
         outcome=outcome,
         disqualification_reason=record.disqualification_reason,
+        selected_language=ScreeningData.model_validate(record.data).language,
     )
 
 
 def _initial_text(language: Language | None) -> str:
-    """Explain the process and request consent before collecting screening data."""
+    """Invite the candidate to opt in by providing their full name."""
 
     if language is not Language.EN:
         return (
-            "Hola, soy el asistente virtual de selección de Grupo Sazón. "
-            "Hemos recibido tu candidatura para el puesto de repartidor/a. "
-            "Este breve screening dura unos 3 minutos y puedes responder en "
-            "español o inglés. ¿Te parece bien continuar?"
+            "Hola 👋 Hemos recibido tu candidatura para el puesto de repartidor/a "
+            "en Grupo Sazón. El screening dura unos 3 minutos. Para continuar, "
+            "¿cuál es tu nombre completo? Puedes responder en español or English."
         )
     return (
-        "Hello, I'm Grupo Sazón's virtual recruiting assistant. We received your "
-        "application for the delivery driver role. This short screening takes "
-        "about 3 minutes, and you can answer in Spanish or English. Is it okay "
-        "to continue?"
+        "Hi 👋 We received your application for the delivery driver role at Grupo "
+        "Sazón. The screening takes about 3 minutes. To continue, what is your "
+        "full name? You can reply in English or español."
     )
 
 
@@ -179,7 +179,7 @@ def _new_record(
         id=new_uuid(),
         application_id=application.id,
         status=ScreeningStatus.IN_PROGRESS.value,
-        stage=ScreeningStage.CONSENT.value,
+        stage=ScreeningStage.FULL_NAME.value,
         data=data.model_dump(mode="json"),
         pending_data={},
         clarification_counts={},
@@ -348,10 +348,14 @@ async def create_candidate_message(
     history = await _provider_history(session, conversation_id)
     transient_state = _graph_state(record, history)
     graph: CompiledStateGraph = request.app.state.screening_graph
-    completed_state = cast(
-        ScreeningGraphState,
-        await graph.ainvoke(transient_state),
-    )
+    completed_state = cast(ScreeningGraphState, dict(transient_state))
+    executed_nodes: list[str] = []
+    async for event in graph.astream(transient_state, stream_mode="updates"):
+        for node_name, node_updates in event.items():
+            if node_name.startswith("__") or not isinstance(node_updates, dict):
+                continue
+            executed_nodes.append(node_name)
+            completed_state.update(node_updates)
     result = to_workflow_result(completed_state)
 
     record.data = result.screening_data
@@ -391,7 +395,20 @@ async def create_candidate_message(
         llm_model=result.llm_model,
         llm_latency_ms=result.llm_latency_ms,
         recoverable_error_code=result.recoverable_error_code,
-        debug_explanation=result.debug_explanation,
+        debug_explanation=json.dumps(
+            {
+                "executed_nodes": executed_nodes,
+                "route": result.route.value,
+                "stage": result.stage.value,
+                "terminal": result.status in TERMINAL_STATUSES,
+                "status": result.status.value,
+                "provider": result.llm_provider,
+                "model": result.llm_model,
+                "provider_latency_ms": result.llm_latency_ms,
+                "recoverable_error_code": result.recoverable_error_code,
+            },
+            ensure_ascii=False,
+        ),
         created_at=utc_now(),
     )
     session.add(assistant)

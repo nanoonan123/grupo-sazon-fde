@@ -9,6 +9,8 @@ from app.domain.models import (
     ScreeningStatus,
 )
 
+SCREENING_CRITERIA_COUNT = 7
+
 
 def missing_required_fields(
     data: ScreeningData,

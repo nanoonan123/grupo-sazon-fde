@@ -21,8 +21,13 @@ def catalog() -> ServiceAreaCatalog:
         ("España, Madrid centro", "ES", "Madrid", "Centro"),
         ("País: España. Ciudad: Madrid. Zona: Centro.", "ES", "Madrid", "Centro"),
         ("Madrid Centro", "ES", "Madrid", "Centro"),
+        ("madrid city center", "ES", "Madrid", "Centro"),
+        ("Madrid city centre", "ES", "Madrid", "Centro"),
+        ("downtown Madrid", "ES", "Madrid", "Centro"),
         ("  madrid,   ZONA centro ", "ES", "Madrid", "Centro"),
         ("México / CDMX / Central", "MX", "Mexico City", "Central"),
+        ("cdmx centro", "MX", "Mexico City", "Central"),
+        ("downtown Mexico City", "MX", "Mexico City", "Central"),
     ],
 )
 def test_supported_location_aliases_are_canonicalized(
@@ -42,11 +47,15 @@ def test_supported_location_aliases_are_canonicalized(
     )
 
 
-def test_country_alone_is_incomplete(catalog: ServiceAreaCatalog) -> None:
-    result = catalog.resolve(raw="España")
+@pytest.mark.parametrize("country", ["España", "espana", "Mexico", "méxico"])
+def test_country_alone_is_incomplete(
+    catalog: ServiceAreaCatalog,
+    country: str,
+) -> None:
+    result = catalog.resolve(raw=country)
 
     assert result.status is LocationResolutionStatus.INCOMPLETE
-    assert result.country_code == "ES"
+    assert result.country_code in {"ES", "MX"}
     assert result.missing_components == ("city", "zone")
 
 
@@ -58,10 +67,23 @@ def test_city_alone_requires_zone(catalog: ServiceAreaCatalog) -> None:
     assert result.missing_components == ("zone",)
 
 
+def test_zone_follow_up_combines_with_known_city(
+    catalog: ServiceAreaCatalog,
+) -> None:
+    result = catalog.resolve(raw="city center", city="Madrid")
+
+    assert result.status is LocationResolutionStatus.RESOLVED
+    assert (result.country_code, result.city, result.zone) == (
+        "ES",
+        "Madrid",
+        "Centro",
+    )
+
+
 def test_close_misspelling_requires_confirmation(
     catalog: ServiceAreaCatalog,
 ) -> None:
-    result = catalog.resolve(raw="Madird centro")
+    result = catalog.resolve(raw="madird city center")
 
     assert result.status is LocationResolutionStatus.SUGGESTION
     assert result.suggestion is not None

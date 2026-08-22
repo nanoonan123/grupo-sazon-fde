@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Screening · Grupo Sazón{% endblock %}
+{% block body_class %}candidate-page{% endblock %}
+{% block head %}
+  <script defer src="{{ url_for('static', path='/candidate.js') }}"></script>
+{% endblock %}
+{% block body %}
+  <main
+    class="chat-app"
+    id="candidate-app"
+    data-conversation-id="{{ conversation_id }}"
+    data-ui-language="{{ ui_language }}"
+    data-status="{{ conversation_status }}"
+    data-outcome="{{ outcome or '' }}"
+    data-stage="{{ stage }}"
+    data-collected="{{ collected }}"
+    data-total="{{ total }}"
+    data-language-locked="true"
+  >
+    <header class="chat-header">
+      <div class="brand-lockup">
+        <img src="{{ url_for('static', path='/logo.svg') }}" alt="" width="42" height="42">
+        <div>
+          <strong>Grupo Sazón</strong>
+          <span data-copy-es="Asistente de selección · activo" data-copy-en="Recruitment assistant · active">Asistente de selección · activo</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="assistant-disclosure" aria-label="Información del asistente">
+      <span class="presence-dot" aria-hidden="true"></span>
+      <div>
+        <strong data-copy-es="Asistente de selección con IA" data-copy-en="AI recruitment assistant">Asistente de selección con IA</strong>
+        <span data-copy-es="Tus respuestas se guardan para que selección las revise." data-copy-en="Your answers are saved for the recruitment team's review.">Tus respuestas se guardan para que selección las revise.</span>
+      </div>
+    </section>
+
+    <section class="progress-panel" aria-labelledby="progress-title">
+      <div class="progress-copy">
+        <span id="progress-title" data-copy-es="Progreso del screening" data-copy-en="Screening progress">Progreso del screening</span>
+        <strong id="progress-value">{{ collected }}/{{ total }}</strong>
+      </div>
+      <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="{{ total }}" aria-valuenow="{{ collected }}">
+        <span id="progress-fill" style="width: {{ (collected / total * 100) | round }}%"></span>
+      </div>
+    </section>
+
+    <section class="message-region" aria-label="Conversación" data-aria-es="Conversación" data-aria-en="Conversation">
+      <div class="message-list" id="message-list" aria-live="polite">
+        {% for message in messages %}
+          <div class="message-row message-row--{{ message.role }}">
+            {% if message.role == "assistant" %}<img class="message-avatar" src="{{ url_for('static', path='/logo.svg') }}" alt="" width="28" height="28">{% endif %}
+            <article class="message message--{{ message.role }}" data-message-id="{{ message.id }}">
+              <span class="sr-only">{{ "Asistente" if message.role == "assistant" else "Candidato/a" }}</span>
+              <p>{{ message.content }}</p>
+              <time datetime="{{ message.created_at.isoformat() }}">{{ message.created_at.strftime('%H:%M') }}</time>
+            </article>
+          </div>
+        {% endfor %}
+      </div>
+      <div class="typing-indicator" id="typing-indicator" role="status" aria-live="polite" hidden>
+        <span></span><span></span><span></span>
+        <span class="sr-only" data-copy-es="El asistente está escribiendo" data-copy-en="The assistant is typing">El asistente está escribiendo</span>
+      </div>
+    </section>
+
+    <section class="terminal-banner" id="terminal-banner" role="status" hidden></section>
+    <section class="network-banner" id="network-banner" role="alert" hidden>
+      <span data-copy-es="No pudimos conectar. Tu historial está guardado; inténtalo de nuevo." data-copy-en="We couldn't connect. Your history is saved; please try again.">No pudimos conectar. Tu historial está guardado; inténtalo de nuevo.</span>
+      <button type="button" class="text-button" id="retry-button" data-copy-es="Reintentar" data-copy-en="Retry">Reintentar</button>
+    </section>
+
+    <form class="composer" id="message-form">
+      <label class="sr-only" for="message-input" data-copy-es="Escribe tu respuesta" data-copy-en="Write your answer">Escribe tu respuesta</label>
+      <textarea
+        id="message-input"
+        name="text"
+        rows="1"
+        maxlength="4000"
+        required
+        data-placeholder-es="Escribe tu respuesta… (you can reply in English)"
+        data-placeholder-en="Type your answer… (puedes responder en español)"
+        placeholder="Escribe tu respuesta… (you can reply in English)"
+        {% if terminal %}disabled{% endif %}
+      ></textarea>
+      <button type="submit" class="send-button" aria-label="Enviar respuesta" data-aria-es="Enviar respuesta" data-aria-en="Send answer" {% if terminal %}disabled{% endif %}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 19 9-19 9 4-9-4-9Zm4.8 8h8.3L6.4 6l1.4 5Zm-1.4 7 9.7-5H7.8l-1.4 5Z"/></svg>
+      </button>
+    </form>
+  </main>
+{% endblock %}

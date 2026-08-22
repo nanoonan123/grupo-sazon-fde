@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Lanzador de demo · Grupo Sazón{% endblock %}
+{% block body_class %}surface-page{% endblock %}
+{% block head %}<script defer src="{{ url_for('static', path='/demo.js') }}"></script>{% endblock %}
+{% block body %}
+  <header class="surface-header">
+    <a class="brand-lockup" href="/demo">
+      <img src="{{ url_for('static', path='/logo.svg') }}" alt="" width="44" height="44">
+      <div><strong>Grupo Sazón</strong><span data-copy-es="Demo ficticia" data-copy-en="Fictional demo">Demo ficticia</span></div>
+    </a>
+    <div class="language-switch" role="group" aria-label="Idioma de la interfaz" data-aria-es="Idioma de la interfaz" data-aria-en="Interface language">
+      <button type="button" class="language-button" data-language="es" aria-pressed="true">ES</button>
+      <button type="button" class="language-button" data-language="en" aria-pressed="false">EN</button>
+    </div>
+  </header>
+  <main class="surface-main narrow-layout utility-layout">
+    <div class="eyebrow" data-copy-es="Utilidad de evaluación" data-copy-en="Evaluator utility">Utilidad de evaluación</div>
+    <h1 data-copy-es="Crear una candidatura de prueba" data-copy-en="Create a test application">Crear una candidatura de prueba</h1>
+    <p class="lede" data-copy-es="Esto simula el webhook del ATS que inicia un screening de candidatura." data-copy-en="This simulates the ATS webhook that starts a candidate screening.">Esto simula el webhook del ATS que inicia un screening de candidatura.</p>
+
+    <section class="surface-card">
+      <form method="post" action="/demo" class="form-grid">
+        <label><span data-copy-es="Teléfono" data-copy-en="Phone">Teléfono</span><input name="phone_number" type="tel" required maxlength="50" value="{{ form.phone_number }}"><small data-copy-es="Identificador de contacto; esta demo local no envía SMS ni WhatsApp." data-copy-en="Candidate contact identifier; this local demo does not send SMS or WhatsApp.">Identificador de contacto; esta demo local no envía SMS ni WhatsApp.</small></label>
+        <label><span data-copy-es="Idioma preferido" data-copy-en="Preferred language">Idioma preferido</span>
+          <select name="preferred_language">
+            <option value="es" {% if form.preferred_language == 'es' %}selected{% endif %}>Español</option>
+            <option value="en" {% if form.preferred_language == 'en' %}selected{% endif %}>English</option>
+          </select>
+          <small data-copy-es="Pista para el mensaje inicial; el agente puede cambiar automáticamente." data-copy-en="Initial-message hint; the agent can switch automatically.">Pista para el mensaje inicial; el agente puede cambiar automáticamente.</small>
+        </label>
+        <details class="advanced-settings"><summary data-copy-es="Configuración avanzada de demo" data-copy-en="Advanced demo settings">Configuración avanzada de demo</summary><div class="advanced-grid">
+          <label><span data-copy-es="ID externo de candidatura" data-copy-en="External application ID">ID externo de candidatura</span><input name="external_application_id" required maxlength="255" value="{{ form.external_application_id }}"><small data-copy-es="Identificador de negocio proporcionado por el ATS." data-copy-en="Business identifier supplied by the ATS.">Identificador de negocio proporcionado por el ATS.</small></label>
+          <label><span data-copy-es="Fuente" data-copy-en="Source">Fuente</span><input name="source" required maxlength="100" value="{{ form.source }}"><small data-copy-es="Identificador del ATS o de la integración." data-copy-en="ATS/integration identifier.">Identificador del ATS o de la integración.</small></label>
+        </div></details>
+        <p class="form-note"><strong>Idempotency:</strong> <span data-copy-es="protección contra webhooks duplicados, generada automáticamente." data-copy-en="duplicate webhook protection, generated automatically.">protección contra webhooks duplicados, generada automáticamente.</span></p>
+        <button class="primary-button" type="submit" data-copy-es="Crear candidatura demo" data-copy-en="Create demo application">Crear candidatura demo</button>
+      </form>
+    </section>
+
+    {% if result %}
+      <section class="surface-card result-card" aria-live="polite">
+        <div class="success-mark" aria-hidden="true">✓</div>
+        <div><div class="eyebrow" data-copy-es="Candidatura creada" data-copy-en="Application created">Candidatura creada</div><h2 data-copy-es="Screening listo para compartir" data-copy-en="Screening ready to share">Screening listo para compartir</h2></div>
+        <label class="copy-field"><span data-copy-es="Enlace de candidatura" data-copy-en="Candidate link">Enlace de candidatura</span><input id="candidate-url" readonly value="{{ candidate_url }}"></label>
+        <div class="button-row">
+          <a class="primary-button" href="{{ candidate_url }}" target="_blank" rel="noopener" data-copy-es="Abrir screening de candidatura" data-copy-en="Open candidate screening">Abrir screening de candidatura</a>
+          <a class="secondary-button" href="/recruiter" data-copy-es="Abrir panel de selección" data-copy-en="Open recruiter dashboard">Abrir panel de selección</a>
+          {% if trace_enabled %}<a class="secondary-button" href="{{ trace_url }}" target="_blank" rel="noopener" data-copy-es="Abrir traza técnica" data-copy-en="Open technical trace">Abrir traza técnica</a>{% endif %}
+          <button type="button" class="secondary-button" id="copy-link" data-copy-es="Copiar URL" data-copy-en="Copy candidate URL">Copiar URL</button>
+        </div>
+        <dl class="identifier-grid"><div><dt>Application ID</dt><dd>{{ result.application_id }}</dd></div><div><dt>Conversation ID</dt><dd>{{ result.conversation_id }}</dd></div></dl>
+      </section>
+    {% endif %}
+    <p class="demo-disclaimer" data-copy-es="Identidad, ubicaciones y métricas de esta demo son ficticias o sintéticas." data-copy-en="Identity, locations, and metrics in this demo are fictional or synthetic.">Identidad, ubicaciones y métricas de esta demo son ficticias o sintéticas.</p>
+  </main>
+{% endblock %}

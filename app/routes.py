@@ -147,18 +147,13 @@ async def _record_business_identity_replay(
     )
 
 
-@router.post(
-    "/ats/applications",
-    response_model=AtsApplicationResult,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_ats_application(
+async def process_ats_application(
     payload: AtsApplicationRequest,
     response: Response,
-    session: Session,
-    idempotency_key: IdempotencyKey,
+    session: AsyncSession,
+    idempotency_key: str,
 ) -> AtsApplicationResult:
-    """Persist a simulated ATS application exactly once per idempotency key."""
+    """Shared authoritative ATS intake operation used by API and demo surfaces."""
 
     normalized_key = idempotency_key.strip()
     if not normalized_key:
@@ -250,6 +245,27 @@ async def create_ats_application(
         conversation_id=conversation.id,
         status=application.status,
         created_at=application.created_at,
+    )
+
+
+@router.post(
+    "/ats/applications",
+    response_model=AtsApplicationResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_ats_application(
+    payload: AtsApplicationRequest,
+    response: Response,
+    session: Session,
+    idempotency_key: IdempotencyKey,
+) -> AtsApplicationResult:
+    """Persist a simulated ATS application exactly once per idempotency key."""
+
+    return await process_ats_application(
+        payload,
+        response,
+        session,
+        idempotency_key,
     )
 
 

@@ -29,8 +29,9 @@ python -m uvicorn app.main:app --reload
 
 Open `http://127.0.0.1:8000/health`; it returns `{"status":"ok"}`. Local
 interactive API documentation is available at `http://127.0.0.1:8000/docs`,
-grouped under **ATS**, **Conversations**, and **Operations**. Production deployments
-must protect or disable interactive documentation.
+grouped under **ATS**, **Conversations**, **Recruiter**, **Developer**, and
+**Operations**. Production deployments must protect or disable interactive
+documentation.
 
 The local database defaults to `data/grupo_sazon.db`. Override `DATABASE_URL` in
 `.env` when a different database is required.
@@ -79,8 +80,9 @@ curl http://127.0.0.1:8000/api/conversations/<conversation_id>
 ```
 
 Start the conversation once, then send candidate messages using the returned
-conversation identifier. The initial message explains the roughly three-minute
-screening and asks for consent before collecting screening data:
+conversation identifier. The roughly three-minute invitation asks for the full
+name as the opt-in action. A valid bare name or affirmative name response grants
+continuation consent and stores the name in the same turn:
 
 ```bash
 curl -X POST \
@@ -92,10 +94,10 @@ curl -X POST \
   -d '{"text":"Sí, soy Alex Rivera."}'
 ```
 
-`/start` is idempotent. Declining consent stops the conversation without a
+`/start` is idempotent. Explicit refusal stops the conversation without a
 disqualification. Each message response includes the persisted assistant message,
-conversation status, deterministic progress, missing fields, and a terminal
-outcome when applicable.
+selected conversation language, deterministic progress, missing fields, and a
+terminal outcome when applicable.
 
 Progress covers seven screening criteria: full name, driver's license, service
 area, availability, preferred schedule, delivery experience, and start date.
@@ -105,9 +107,53 @@ at least one platform name.
 
 Configured demo locations use canonical country codes `ES` and `MX`. City and zone
 can identify a supported area without asking for country when the pair is unique.
-For example, `Madrid Centro`, `España, Madrid centro`, and the labelled equivalent
-resolve to canonical `ES / Madrid / Centro`. Partial answers trigger targeted
-questions, and close spellings require explicit confirmation before persistence.
+For example, `Madrid Centro`, `madrid city center`, `Madrid city centre`,
+`downtown Madrid`, and `España, Madrid centro` resolve to canonical
+`ES / Madrid / Centro`. `CDMX centro` and `downtown Mexico City` resolve to the
+configured Mexico demo area. Partial answers combine with validated location state;
+close spellings require explicit confirmation before persistence. Spain or Mexico
+alone never constitutes a supported service area.
+
+## Demo web surfaces
+
+With the API running, open:
+
+- Candidate mobile chat: `http://127.0.0.1:8000/screen/<conversation_id>`
+- Simulated ATS launcher: `http://127.0.0.1:8000/demo`
+- Recruiter operations dashboard: `http://127.0.0.1:8000/recruiter`
+- Optional post-turn technical trace:
+  `http://127.0.0.1:8000/debug/conversations/<conversation_id>`
+- Developer API documentation: `http://127.0.0.1:8000/docs`
+
+Suggested demo walkthrough:
+
+1. Open `/demo`, review the generated ATS fields, and create a demo application.
+2. Copy or open the candidate screening link returned by the launcher.
+3. Enter a full name to opt in, then answer the remaining screening criteria.
+4. Refresh the candidate page to verify that the complete transcript is restored.
+5. Open the technical trace after a turn to see the real LangGraph nodes executed.
+6. Open `/recruiter` to review measured demo KPIs, filters, candidate details,
+   structured fields, transcript, and provider operations metadata.
+
+The launcher is explicitly a simulated ATS delivery, not a recruiter workflow.
+The dashboard separates metrics calculated from persisted synthetic records from
+the client-stated baseline of approximately 200 weekly applications, 60% missed
+phone contact, and 80% recruiter time spent on unqualified candidates. The demo
+does not claim ROI or business improvement.
+
+The optional trace uses actual LangGraph `updates` stream events. It shows the
+static graph, latest executed nodes, route, stage, status, provider/model, latency,
+and recoverable error code. It excludes candidate messages, phone/name, structured
+screening data, prompts, and model explanations. This is a post-turn trace—not a
+live stream—and its routes are omitted when `APP_ENVIRONMENT=production`.
+
+### Demo security limitations
+
+The pages are intentionally unauthenticated for local evaluation. Production
+requires recruiter authentication and role-based access control, signed expiring
+candidate links, webhook signatures or scoped ATS credentials, protected or
+disabled Swagger access, transport security, and normal web hardening. None of
+those controls should be inferred from the local demo.
 
 Run checks:
 
@@ -122,11 +168,15 @@ Implemented now: project packaging, environment configuration, health endpoint,
 domain models, deterministic rules, asynchronous persistence, idempotent ATS
 application intake, resource retrieval, structured OpenAI interpretation, an
 explicit LangGraph workflow, deterministic response routing, synthetic data, and
-tests. Tests use `FakeScreeningProvider` and never call external APIs.
+tests. The current slice also includes server-rendered candidate, ATS-demo, and
+recruiter surfaces, read-only database-backed analytics, and a development-only
+privacy-safe LangGraph trace. Tests use
+`FakeScreeningProvider` and never call external APIs.
 
 Planned but not implemented: database migrations and production PostgreSQL
-deployment, frontend pages, retrieval-augmented generation (RAG), ElevenLabs
-webhook tools, analytics, and deployment automation.
+deployment, production authentication, signed candidate links, retrieval-augmented
+generation (RAG), ElevenLabs webhook tools, re-engagement scheduling, and
+deployment automation.
 
 The Phase 1 process specification remains in `docs/PROCESS_DESIGN.docx`. Technical
 boundaries and provisional choices are recorded in

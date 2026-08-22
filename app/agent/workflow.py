@@ -1,5 +1,6 @@
 """Explicit transient LangGraph workflow for one screening turn."""
 
+import re
 from datetime import date
 from time import perf_counter
 from typing import TypedDict, cast
@@ -80,6 +81,22 @@ FIELD_TO_STAGE = {
 }
 
 KNOWN_CLARIFICATION_FIELDS = frozenset(FIELD_TO_STAGE)
+
+
+def _latest_candidate_text(state: ScreeningGraphState) -> str:
+    """Return the latest candidate message from database-reconstructed history."""
+
+    for message in reversed(state["history"]):
+        if message.role == "user":
+            return message.content.strip()
+    return ""
+
+
+def _is_complete_language_turn(state: ScreeningGraphState) -> bool:
+    """Reject isolated names/words while allowing clear sentence-level switching."""
+
+    words = re.findall(r"[^\W_]+(?:['’][^\W_]+)?", _latest_candidate_text(state))
+    return len(words) >= 4
 
 
 def _stage_for_missing(missing_fields: list[str]) -> ScreeningStage:
@@ -243,16 +260,27 @@ def _merge_location(
     if not location_changed:
         return set()
 
-    raw = updates.location_raw
-    country = updates.location_country or data.location_country
-    city = updates.location_city or data.location_city
-    zone = updates.location_zone or data.location_zone
+    raw = updates.location_raw or _latest_candidate_text(state)
+    # Raw candidate wording is the evidence for a new location turn. Previously
+    # validated partial state may complete it, but normalized LLM proposals cannot
+    # silently turn approximate candidate text into an exact catalogue match.
+    country = data.location_country
+    city = data.location_city
+    zone = data.location_zone
     resolution = catalog.resolve(raw=raw, country=country, city=city, zone=zone)
     if resolution.status is LocationResolutionStatus.RESOLVED:
         data.location_country = resolution.country_code
         data.location_city = resolution.city
         data.location_zone = resolution.zone
-        data.location_raw = (raw or ", ".join((city or "", zone or ""))).strip()
+        data.location_raw = " / ".join(
+            part
+            for part in (
+                resolution.country_code,
+                resolution.city,
+                resolution.zone,
+            )
+            if part
+        )
         state["service_area_supported"] = True
         pending.pop("location", None)
         clarifications.discard("service_area")
@@ -293,9 +321,9 @@ def _merge_location(
     unknown = {
         "status": "unknown",
         "raw": raw,
-        "country": country,
-        "city": city,
-        "zone": zone,
+        "country": updates.location_country or country,
+        "city": updates.location_city or city,
+        "zone": updates.location_zone or zone,
     }
     pending["location"] = unknown
     if interpretation.confirmed_outside_service_area:
@@ -405,13 +433,26 @@ def build_screening_graph(
         if interpretation.explicit_language_switch is not None:
             data.language = interpretation.explicit_language_switch
             counts.pop("language", None)
+        elif (
+            data.language is not None
+            and interpretation.detected_language is not data.language
+            and _is_complete_language_turn(state)
+        ):
+            data.language = interpretation.detected_language
 
         consent_granted = state["consent_granted"]
-        consent_newly_granted = (
-            interpretation.consent is True and consent_granted is not True
+        supplied_name_as_opt_in = (
+            consent_granted is None
+            and interpretation.consent is None
+            and interpretation.intent is CandidateIntent.SCREENING_ANSWER
+            and bool((interpretation.updates.full_name or "").strip())
         )
-        if interpretation.consent is not None:
-            consent_granted = interpretation.consent
+        consent_newly_granted = (
+            (interpretation.consent is True or supplied_name_as_opt_in)
+            and consent_granted is not True
+        )
+        if interpretation.consent is not None or supplied_name_as_opt_in:
+            consent_granted = interpretation.consent is not False
             pending["consent_granted"] = consent_granted
             updates["consent_granted"] = consent_granted
 
@@ -436,6 +477,7 @@ def build_screening_graph(
             missing = _current_missing_fields(state)
             clarifications.add(missing[0] if missing else state["stage"].value)
 
+        was_clarifying_location = isinstance(pending.get("location"), dict)
         resolved = _merge_simple_updates(data, interpretation, clarifications)
         if consent_newly_granted:
             resolved.add("consent")
@@ -464,6 +506,8 @@ def build_screening_graph(
         for field in resolved - clarifications:
             counts.pop(field, None)
         for field in clarifications:
+            if field == "service_area" and not was_clarifying_location:
+                continue
             counts[field] = counts.get(field, 0) + 1
         updates["turn_clarification_fields"] = sorted(clarifications)
         updates["turn_resolved_fields"] = sorted(resolved)
@@ -477,7 +521,7 @@ def build_screening_graph(
                 "route": GraphRoute.ASK_NEXT_QUESTION,
                 "status": ScreeningStatus.IN_PROGRESS,
                 "stage": (
-                    ScreeningStage.CONSENT
+                    ScreeningStage.FULL_NAME
                     if state["consent_granted"] is not True
                     else _stage_for_missing(missing)
                 ),
@@ -505,7 +549,7 @@ def build_screening_graph(
             return {
                 "route": GraphRoute.ASK_NEXT_QUESTION,
                 "status": ScreeningStatus.IN_PROGRESS,
-                "stage": ScreeningStage.CONSENT,
+                "stage": ScreeningStage.FULL_NAME,
                 "missing_fields": _current_missing_fields(state),
             }
 
@@ -780,13 +824,19 @@ def _compose_candidate_response(
             )
         )
     if route is GraphRoute.QUALIFIED:
+        name = state["screening_data"].full_name or ""
+        first_name = name.split()[0] if name.split() else ""
         return (
-            "Gracias. He completado tu evaluación y selección revisará los "
-            "próximos pasos."
+            f"Gracias, {first_name}. Has completado el screening inicial y cumples "
+            "los requisitos básicos configurados para el puesto. El equipo de "
+            "selección de Grupo Sazón revisará tu candidatura y se pondrá en "
+            "contacto contigo para explicarte los siguientes pasos."
             if spanish
             else (
-                "Thank you. Your screening is complete and recruiting will review "
-                "next steps."
+                f"Thank you, {first_name}. You have completed the initial screening "
+                "and meet the configured basic requirements for the role. Grupo "
+                "Sazón's recruitment team will review your application and contact "
+                "you with the next steps."
             )
         )
     if route is GraphRoute.NEEDS_REVIEW:

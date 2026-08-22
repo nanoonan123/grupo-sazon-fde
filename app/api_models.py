@@ -106,3 +106,4 @@ class ConversationTurnResponse(BaseModel):
     missing_fields: list[str]
     outcome: ScreeningStatus | None = None
     disqualification_reason: str | None = None
+    selected_language: Language | None = None

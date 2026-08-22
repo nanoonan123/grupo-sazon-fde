@@ -12,9 +12,18 @@
       "areas": [
         {
           "city": "Madrid",
-          "city_aliases": [],
+          "city_aliases": ["Madrid City"],
           "zone": "Centro",
-          "zone_aliases": ["Madrid Centro", "Zona Centro", "Zona Centro Demo ES-01"],
+          "zone_aliases": [
+            "Madrid Centro",
+            "Centro Madrid",
+            "Zona Centro",
+            "City Center",
+            "City Centre",
+            "Downtown",
+            "Downtown Madrid",
+            "Zona Centro Demo ES-01"
+          ],
           "demo_only": true
         },
         {
@@ -35,7 +44,16 @@
           "city": "Mexico City",
           "city_aliases": ["Ciudad de Mexico", "Ciudad de México", "CDMX"],
           "zone": "Central",
-          "zone_aliases": ["Zona Central", "Zona Central Demo MX-01"],
+          "zone_aliases": [
+            "Centro",
+            "Centro CDMX",
+            "Downtown",
+            "Downtown Mexico City",
+            "City Center",
+            "City Centre",
+            "Zona Central",
+            "Zona Central Demo MX-01"
+          ],
           "demo_only": true
         },
         {

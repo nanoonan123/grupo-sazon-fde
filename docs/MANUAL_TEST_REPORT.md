@@ -2,87 +2,92 @@
 
 ## Scope
 
-This report records the focused usability review prompted by the latest real
-Spanish conversation test. It does not replace the Phase 1 Process Design.
+This report records the focused bilingual conversation review and the follow-up
+regression for service-area resolution. It complements the Process Design and the
+automated suite.
 
-## Observed behavior
+## Original observations
 
-The test revealed four concrete problems:
+The first real Spanish run exposed consent/progress and location problems:
 
-1. The initial assistant message asked for the candidate's name immediately. It
-   did not explain the screening purpose, expected duration, language options, or
-   ask permission to continue.
-2. Both `España, Madrid centro` and
-   `País: España. Ciudad: Madrid. Zona: Centro.` were rejected even though
-   Madrid/Centro is intended to be a supported fictional demo area.
-3. Every location clarification repeated country, city, and zone instead of
-   asking only for the unresolved component.
-4. Progress showed 7/8 because selected language was counted as a screening
-   field. The actual workflow has seven screening criteria.
+- The opening collected a name before explaining duration and language options.
+- Common `España / Madrid / Centro` wording did not match the original synthetic
+  catalogue representation.
+- Location clarification repeated country, city, and zone instead of asking only
+  for the missing component.
+- Language was incorrectly included in an eight-field progress denominator.
 
-The eventual `needs_review` result was safe because the system did not silently
-accept an unresolved area, but it was avoidable for this valid configured demo
-location.
+Those issues were corrected by the earlier consent, seven-criterion progress, and
+canonical catalogue work. A later English typo regression exposed a narrower
+failure:
 
-## Exact root cause
+1. Candidate: `madird city center`.
+2. The provider proposed canonical city `Madrid`, but the deterministic catalogue
+   did not have `city center` as an exact zone alias.
+3. The resolver therefore saved Madrid as partial state and asked for its zone.
+4. Candidate: `city center`.
+5. The alias was still unknown, and both the initial internal incomplete state and
+   the follow-up incremented the clarification counter. At the configured limit of
+   two, the conversation incorrectly ended in `needs_review`.
 
-| Problem | Root cause before correction |
-| --- | --- |
-| Madrid/Centro rejected | The JSON catalog stored the zone only as `Zona Centro Demo ES-01`, while `ServiceAreaCatalog.supports` required an exact normalized country/city/zone triple. `Centro` was therefore not equal to the configured value. |
-| `España` rejected | Country matching included only `ES` and `Spain`; `España` was not a configured alias. |
-| Country always required | Location merging required country, city, and zone to be non-null before attempting validation. It could not infer a country from a unique configured city+zone pair. |
-| Common phrasing failed | The resolver compared already separated exact fields and had no deterministic parsing for labels, punctuation, commas, diacritics, or compact forms such as `Madrid centro`. |
-| Clarification repeated all fields | Every partial, unknown, or approximate location collapsed into one `service_area` flag. No metadata described whether city, zone, or country was missing. |
-| Progress denominator was eight | `language` appeared in required-field evaluation and the API used a hard-coded total of eight. |
-| No consent stage | Conversation start selected either the language or full-name stage and immediately asked a screening question. |
+The outcome was conservative—it did not silently accept a location—but the retry
+accounting and alias coverage made a valid configured area fail.
 
 ## Corrections implemented
 
-- Conversation start now explains purpose and duration, offers Spanish or
-  English, and asks for consent. Consent is process metadata and is excluded from
-  screening progress. Rejection stops the conversation without disqualification.
-- Progress is calculated from seven criteria: full name, driver's license,
-  service area, availability, preferred schedule, delivery experience, and start
-  date. Delivery experience is complete with zero years, or with years plus at
-  least one platform when years are greater than zero.
-- The synthetic catalog now uses canonical `ES` and `MX` country codes and
-  canonical user-facing city/zone names. Explicit country, city, and zone aliases
-  are configured rather than guessed.
-- Deterministic resolution ignores case, surrounding whitespace, diacritics, and
-  common separators. A unique configured city+zone pair may infer country.
-- Country alone remains insufficient. City alone asks only for zone. Country is
-  requested only when an otherwise valid city+zone pair is configured in more
-  than one country.
-- A strong, unique close spelling match becomes a pending suggestion. It is not
-  authoritative until the candidate confirms it. Unknown locations are not
-  considered outside the service area until the candidate clearly confirms them.
-- Clarification metadata now drives one targeted question. The configured retry
-  limit still routes unresolved ambiguity to `needs_review`.
+- The opening now combines the short invitation and full-name question. A valid
+  name is the opt-in action and is stored in the same turn; explicit refusal remains
+  stopped/incomplete rather than disqualified.
+- Progress remains seven criteria; consent and language are process metadata.
+- The catalogue contains explicit Spanish/English aliases and word orders for the
+  fictional Madrid/Centro and Mexico City/Central areas, including `city center`,
+  `city centre`, `downtown`, `CDMX`, and `centro` forms.
+- Raw candidate wording is the evidence for each new location turn. Previously
+  validated partial state can complete it, but an LLM-proposed normalized field
+  cannot silently turn candidate typo text into an exact match.
+- `Madrid` followed by `city center` resolves to `ES / Madrid / Centro`.
+- A strong typo such as `madird city center` creates a canonical suggestion and
+  requires confirmation. Approximate matches are never automatically accepted.
+- Unknown locations require explicit confirmation before the deterministic
+  `outside_service_area` outcome.
+- The service-area clarification counter starts only after a requested follow-up
+  fails. Initial deterministic incomplete/suggestion creation does not consume a
+  retry.
 
 ## Acceptance examples
 
 | Candidate input | Deterministic result |
 | --- | --- |
-| `España, Madrid centro` | Supported; persist `ES / Madrid / Centro` |
-| `País: España. Ciudad: Madrid. Zona: Centro.` | Supported; persist `ES / Madrid / Centro` |
-| `Madrid Centro` | Supported; infer and persist country `ES` |
-| `España` | Incomplete; ask for city and zone |
-| `Madrid` | Incomplete; ask only for zone |
-| `Madird centro` | Suggest `Madrid / Centro`; persist only after confirmation |
-| `Barcelona, Norte` | Ask for confirmation; confirmed unknown area is outside |
+| `Madrid centro` | Supported; `ES / Madrid / Centro` |
+| `madrid city center` | Supported; `ES / Madrid / Centro` |
+| `Madrid city centre` | Supported; `ES / Madrid / Centro` |
+| `downtown Madrid` | Supported; `ES / Madrid / Centro` |
+| `madird city center` | Suggest Madrid/Centro; confirmation required |
+| `Madrid`, then `city center` | Combine partial state; supported |
+| `madrid` | Incomplete; ask only for zone |
+| `España` or `Mexico` | Incomplete; ask for city and zone |
+| `CDMX centro` / `downtown Mexico City` | Supported; `MX / Mexico City / Central` |
+| Confirmed `Barcelona, Norte` | Deterministic outside-service-area outcome |
 
-## Verification
+## Current demo surfaces
 
-Automated coverage includes consent acceptance, rejection, and consent plus name
-in one turn; 0/7 progress and language independence; exact and aliased location
-forms; country-only and city-only clarification; spelling confirmation; confirmed
-unknown areas; retry-limit review; and all earlier workflow and persistence tests.
+Frontend and analytics are implemented in this slice. The candidate page restores
+persisted history and follows the authoritative conversation language without a
+manual selector. The compact `/demo` launcher simulates ATS intake. The read-only
+`/recruiter` dashboard separates synthetic measured data from the client-supplied
+baseline. A development-only technical page shows the latest real LangGraph node
+updates without transcript or structured candidate data.
 
-## Remaining limitations
+## Verification and remaining limitations
 
-- The area list is explicitly fictional demo data and is not a researched Grupo
-  Sazón operating-area catalog.
-- Alias lists are curated configuration. The resolver deliberately avoids broad
-  fuzzy acceptance and geocoding.
-- Production schema migrations, frontend, RAG, analytics, voice integrations,
-  and deployment remain outside this slice.
+Automated tests cover the aliases, typo confirmation, partial-state merge, unknown
+confirmation, retry semantics, combined opt-in/name, language switching, terminal
+copy, UI boundaries, and post-turn trace privacy. Tests use the fake provider and
+make no external model calls.
+
+- Service areas remain fictional curated demo data, not researched Grupo Sazón
+  operating sites; there is no geocoding or broad fuzzy acceptance.
+- The technical trace is post-turn, not live SSE/WebSocket streaming.
+- Data deletion records a deleted status but does not physically anonymize PII.
+- RAG, backend-connected voice, re-engagement, production authentication,
+  deployment, and production analytics remain unimplemented.

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Grupo Sazón</title>
+  <desc id="desc">Marca ficticia con un cuenco y una hoja</desc>
+  <circle cx="32" cy="32" r="30" fill="#f5ead7"/>
+  <path d="M14 33h36c-1.8 12-8.2 18-18 18S15.8 45 14 33Z" fill="#a7462e"/>
+  <path d="M20 29c6.8-6.5 17.2-8.5 25-3.5-4.6 4.7-12.5 6.7-25 3.5Z" fill="#284d3f"/>
+  <path d="M29 23c-3-4.2-1.8-7.5 1-10m8 10c3-4.2 1.8-7.5-1-10" fill="none" stroke="#a7462e" stroke-width="3" stroke-linecap="round"/>
+  <path d="M20 54h24" stroke="#284d3f" stroke-width="3" stroke-linecap="round"/>
+</svg>
