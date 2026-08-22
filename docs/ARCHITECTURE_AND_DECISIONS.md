@@ -62,3 +62,120 @@ contracts with that backend and must not independently determine qualification.
 - Secrets belong in local environment variables and must never be committed.
 - A database will become the source of truth when persistence is implemented; no
   persistence exists in this foundation.
+
+
+## LLM Model Selection
+
+_Last reviewed: 22 August 2026._
+
+### Decision principles
+
+The screening agent does not require the most capable reasoning model available. Its main LLM responsibilities are:
+
+1. Understand short and potentially informal candidate messages.
+2. Extract screening information into a structured contract.
+3. Ask concise and context-aware follow-up questions.
+4. Support Spanish, English, and basic code-switching.
+5. Call application tools reliably.
+6. Operate with low latency and predictable cost at high volume.
+
+Qualification is not delegated to the LLM. Deterministic domain rules validate the extracted data and produce the final outcome. Therefore, model selection should prioritize extraction reliability, tool-calling performance, multilingual quality, latency, and cost rather than maximum general reasoning capability.
+
+Model recency is used as an initial quality filter, but being the newest or largest model is not sufficient justification. The final choice must be supported by task-specific evaluations.
+
+### Candidate models
+
+| Provider | Model | Decision | Rationale |
+|---|---|---|---|
+| OpenAI | GPT-5.6 Sol | Not selected | Designed for the most demanding coding and reasoning workloads. Its additional capability and higher cost are not justified for short screening conversations governed by deterministic business rules. |
+| OpenAI | GPT-5.6 Terra | Benchmark finalist | A balanced model that may provide stronger instruction following and ambiguity handling than smaller alternatives while remaining suitable for production applications. |
+| OpenAI | GPT-5.6 Luna | Benchmark finalist and initial production hypothesis | Optimized for fast, cost-sensitive workloads. It should be sufficient for short multilingual conversations, extraction, and tool calling if validated through evaluations. |
+| Anthropic | Claude Opus family | Not selected | Strong reasoning capability, but excessive cost and latency for this narrow, high-volume workflow. |
+| Anthropic | Claude Sonnet family | Viable alternative | A strong balanced option, particularly for instruction following and natural dialogue, but it does not add enough initial benchmark diversity to justify testing every provider. |
+| Anthropic | Claude Haiku 4.5 | Viable future benchmark | A relevant low-latency alternative. It would be the first Anthropic model evaluated if the initial finalists fail quality or reliability thresholds. |
+| Google | Gemini 3.5 Flash | Not selected for the initial benchmark | Its additional capability may be valuable for more complex agentic workflows, but it is not clearly necessary for this bounded collection process. |
+| Google | Gemini 3.5 Flash-Lite | Benchmark finalist | Designed for high-throughput and latency-sensitive workloads. It provides a useful cross-provider comparison for multilingual extraction, conversational quality, and cost. |
+
+The initial benchmark therefore compares:
+
+- GPT-5.6 Luna: production-first cost and latency hypothesis.
+- GPT-5.6 Terra: higher-capability OpenAI reference.
+- Gemini 3.5 Flash-Lite: efficient cross-provider reference.
+
+Anthropic is not considered unsuitable. Claude Haiku 4.5 is the next candidate if the initial benchmark reveals shortcomings or if additional provider diversity is required. Limiting the first experiment to three models keeps the evaluation focused and reproducible.
+
+### Open-weight models
+
+The term “open-weight” is more precise than “open-source” because model licences and permitted uses vary.
+
+#### Self-hosted open-weight models
+
+Self-hosting was not selected for this implementation because it would require:
+
+- GPU infrastructure or an external inference cluster.
+- Model serving, scaling, deployment, and version management.
+- Monitoring inference latency, memory usage, and availability.
+- Security hardening and ongoing operational ownership.
+- Additional work to guarantee reliable structured output and tool calling.
+
+Grupo Sazón processes approximately 200 applications per week. At this volume, managed APIs offer a better engineering and operational trade-off. There is also no stated on-premise or strict data-residency requirement that would justify operating dedicated inference infrastructure.
+
+Self-hosting should be reconsidered if the client requires on-premise deployment, strict data localisation, model-level customisation, or sufficiently large sustained volume to justify the operational investment.
+
+#### Hosted open-weight models
+
+Hosted open-weight models run on infrastructure operated by providers such as managed inference platforms. They do not consume the application server's local CPU or GPU.
+
+They are not excluded because of inherently lower quality. They are excluded from the initial benchmark because:
+
+- Model behaviour and service reliability depend on the combination of model and hosting provider.
+- Structured-output and tool-calling reliability must be validated separately for each host.
+- Provider-specific SLAs, retention policies, observability, and regional availability must also be assessed.
+- The expected volume does not currently provide a decisive cost or control advantage.
+- Adding more providers would expand the evaluation matrix without answering a materially different question.
+
+A hosted open-weight model would become attractive if it provided a measured cost advantage, better regional deployment, stronger portability, or equivalent extraction reliability under the project evaluation suite.
+
+### Evaluation methodology
+
+Each finalist will run the same simulated conversations, including:
+
+- Spanish and English happy paths.
+- Code-switching.
+- Multiple fields supplied in one message.
+- Ambiguous locations and dates.
+- Misspellings and informal language.
+- Missing or contradictory answers.
+- Candidate questions during screening.
+- Prompt-injection and off-topic attempts.
+- Repeated abusive language.
+- Provider timeouts and malformed structured responses.
+
+The following metrics will be recorded:
+
+- Field-level extraction accuracy.
+- Complete-record accuracy.
+- Validation and tool-call success rate.
+- Incorrect qualification rate.
+- Conversation completion rate.
+- Average turns to completion.
+- P50 and P95 response latency.
+- Estimated cost per completed screening.
+- Recovery rate after ambiguous input.
+
+Incorrect qualification is a release-blocking failure. Cost and latency will only determine the winner among models that meet the required quality and reliability thresholds.
+
+### Current decision
+
+GPT-5.6 Luna is the initial production hypothesis because this is a bounded, high-volume workflow with deterministic qualification rules. GPT-5.6 Terra and Gemini 3.5 Flash-Lite will be used as comparison points.
+
+The application will access models through a provider adapter so that model selection remains a configuration decision rather than a rewrite. The final production model will be selected from evaluation evidence, not brand preference or benchmark reputation.
+
+### Official references
+
+- [OpenAI model documentation](https://developers.openai.com/api/docs/models)
+- [Anthropic model overview](https://platform.claude.com/docs/en/about-claude/models/overview)
+- [Anthropic model selection guidance](https://platform.claude.com/docs/en/about-claude/models/choosing-a-model)
+- [Gemini 3.5 Flash documentation](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash)
+- [Gemini 3.5 Flash-Lite documentation](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite)
+- [ElevenLabs agent prompting guide](https://elevenlabs.io/docs/eleven-agents/best-practices/prompting-guide)
