@@ -1,0 +1,41 @@
+{
+  "metadata": {
+    "dataset": "synthetic_demo_service_areas",
+    "fictional": true,
+    "notice": "These areas are fictional demo data only. They are not researched or verified Grupo Sazon locations."
+  },
+  "countries": [
+    {
+      "country_code": "ES",
+      "country_name": "Spain",
+      "areas": [
+        {
+          "city": "Madrid",
+          "zone": "Zona Centro Demo ES-01",
+          "demo_only": true
+        },
+        {
+          "city": "Valencia",
+          "zone": "Zona Turia Demo ES-02",
+          "demo_only": true
+        }
+      ]
+    },
+    {
+      "country_code": "MX",
+      "country_name": "Mexico",
+      "areas": [
+        {
+          "city": "Mexico City",
+          "zone": "Zona Central Demo MX-01",
+          "demo_only": true
+        },
+        {
+          "city": "Guadalajara",
+          "zone": "Zona Poniente Demo MX-02",
+          "demo_only": true
+        }
+      ]
+    }
+  ]
+}
