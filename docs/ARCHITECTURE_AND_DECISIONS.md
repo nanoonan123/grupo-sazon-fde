@@ -7,9 +7,10 @@ the candidate screening application. It complements, rather than repeats, the
 Phase 1 Process Design in `PROCESS_DESIGN.docx`.
 
 The current foundation provides configuration, structured domain contracts,
-deterministic eligibility rules, a health endpoint, synthetic service-area data,
-and tests. Conversation orchestration, model calls, persistence, retrieval,
-voice, and user-facing pages remain planned.
+deterministic eligibility rules, a health endpoint, asynchronous persistence,
+simulated ATS intake, synthetic service-area data, and tests. Conversation
+orchestration, model calls, retrieval, voice, and user-facing pages remain
+planned.
 
 ## Five-layer separation
 
@@ -36,7 +37,7 @@ before they can affect an outcome.
 | Domain logic | Plain Python functions | Easy to test, audit, and keep deterministic | Adopted |
 | Orchestration | LangGraph | Explicit conversational state and transitions | Planned |
 | Model provider | OpenAI API | Language understanding and response generation | Planned |
-| Persistence | SQLAlchemy async with SQLite initially | Portable local demo path with an upgrade route | Planned |
+| Persistence | SQLAlchemy 2.x async with aiosqlite initially | Portable local demo path with a PostgreSQL upgrade route | Adopted for foundation |
 | Server-rendered UI | Jinja2 plus HTML/CSS/JavaScript | Lightweight mobile web experience | Planned |
 | Retrieval | To be selected after approved content is available | Avoid premature knowledge architecture | Planned |
 | Voice | ElevenLabs integration | Candidate-initiated browser voice | Planned |
@@ -44,6 +45,47 @@ before they can affect an outcome.
 
 These choices are intentionally provisional where integration behavior, scale, or
 client requirements have not yet been validated.
+
+## Persistence and ATS intake
+
+SQLite is the local runtime database and is accessed only through SQLAlchemy's
+async engine and sessions. The schema uses portable SQLAlchemy types and UUID
+strings so a later PostgreSQL migration does not require changing API identifiers
+or domain contracts. Database URLs come from Pydantic Settings through the
+`DATABASE_URL` environment variable.
+
+The persistence boundary currently contains five records:
+
+- `CandidateApplication` stores the external ATS identifier, phone number,
+  source, preferred language, and application status.
+- `Conversation` identifies the durable conversation associated one-to-one with
+  an application.
+- `Message` provides durable conversation history storage for a future slice.
+- `ScreeningRecord` provides structured screening state independently of any LLM
+  or orchestration context.
+- `InboundEvent` stores the webhook idempotency receipt and its application link.
+
+All identifiers are UUID strings. Application timestamps are generated as
+timezone-aware UTC values. A small SQLAlchemy timestamp type restores UTC timezone
+information after SQLite reads, because SQLite itself does not retain timezone
+metadata.
+
+ATS intake creates the candidate application, conversation, and inbound event in
+one transaction. `InboundEvent.idempotency_key` has a unique database constraint.
+Its payload digest is calculated from the validated, canonical JSON request:
+
+- A new key creates the records and returns HTTP 201.
+- The same key and digest returns the original identifiers with HTTP 200.
+- The same key with a different digest returns HTTP 409.
+
+The unique constraint remains the final concurrency guard even when two deliveries
+race. The database is authoritative; LLM or future LangGraph state must never
+replace these persisted records as the source of truth.
+
+FastAPI lifespan handling creates the local schema before serving requests and
+disposes the engine at shutdown. `create_all` is intentionally limited to this
+foundation. Versioned migrations, expected to use Alembic, are required before a
+production PostgreSQL deployment.
 
 ## Frontend and agent language boundary
 
@@ -60,8 +102,8 @@ contracts with that backend and must not independently determine qualification.
   locations.
 - Domain rules must remain independent of LLMs and orchestration frameworks.
 - Secrets belong in local environment variables and must never be committed.
-- A database will become the source of truth when persistence is implemented; no
-  persistence exists in this foundation.
+- The database is the source of truth for application, conversation, message,
+  screening, and inbound-event records.
 
 
 ## LLM Model Selection

@@ -16,4 +16,5 @@ class Settings(BaseSettings):
     app_name: str = "Grupo Sazon Candidate Screening API"
     app_version: str = "0.1.0"
     app_environment: str = "development"
+    database_url: str = "sqlite+aiosqlite:///./data/grupo_sazon.db"
     ambiguity_retry_limit: int = Field(default=2, ge=1)
