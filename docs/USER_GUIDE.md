@@ -8,7 +8,8 @@ eligibility rules. It does not make hiring decisions from an LLM response.
 
 ## Run a demonstration
 
-1. Open `/demo` and enter a phone number and preferred language.
+1. Open `/demo` and enter the phone country/number, ATS application ID, source and
+   preferred language.
 2. Select **Crear screening demo**. The candidate chat opens immediately.
 3. Reply as the candidate. A full name is required; a first name alone prompts
    for the surname. The chat saves progress after every completed turn.
@@ -16,7 +17,8 @@ eligibility rules. It does not make hiring decisions from an LLM response.
    structured data and outcome.
 
 Qualified candidates can choose an available Wednesday/Thursday recruiter-contact
-slot. Times show their market: Madrid or Mexico City.
+slot. Times show their market: Madrid or Mexico City. Select **Continuar por voz**
+only when the optional ElevenLabs configuration is available; otherwise use text.
 
 ## Outcomes and limits
 

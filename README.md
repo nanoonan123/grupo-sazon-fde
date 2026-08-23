@@ -186,6 +186,20 @@ been manually validated; end-to-end webhook synchronization needs a public HTTPS
 endpoint and is not enabled in the local submitted demo. See
 [`docs/ELEVENLABS_CONFIGURATION.md`](docs/ELEVENLABS_CONFIGURATION.md).
 
+## Assignment coverage
+
+| Area | Status | Scope note |
+| --- | --- | --- |
+| ATS intake and idempotency | Implemented | Simulated ATS endpoint, persisted application/conversation and duplicate handling. |
+| Candidate messaging and deterministic eligibility | Implemented | Seven fields, ES/EN conversation, persisted state and deterministic outcomes. |
+| Recruiter panel and analytics | Implemented | Read-only database-backed applications, outcomes, metrics and booking visibility. |
+| Automated tests | Implemented | Network-free unit and integration coverage using the fake provider. |
+| Browser voice and voice-turn adapter | Partial | UI and authenticated adapter exist; public-HTTPS end-to-end synchronization is not enabled locally. |
+| Production deployment | Partial | The architecture is documented; managed infrastructure and hardening are not deployed. |
+| Re-engagement reminders | Designed/deferred | 24h/72h reminders and seven-day closure are process design only. |
+| RAG | Intentionally excluded | No approved knowledge base or retrieval implementation is included. |
+| Submission video | Pending deliverable | Not produced by this repository. |
+
 The Phase 1 process specification remains in `docs/PROCESS_DESIGN.docx`. Technical
 boundaries and provisional choices are recorded in
 [`docs/ARCHITECTURE_AND_DECISIONS.md`](docs/ARCHITECTURE_AND_DECISIONS.md).

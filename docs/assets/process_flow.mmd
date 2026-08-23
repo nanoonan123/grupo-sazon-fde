@@ -1,0 +1,37 @@
+flowchart TD
+    A["ATS intake"] --> B["Disclosure and full name"]
+    B -->|Stop or refusal| I["Incomplete; partial state saved"]
+    B --> C["Driver's license"]
+
+    C -->|No| D["Disqualified; reason persisted"]
+    C -->|Yes| E["City and service zone"]
+
+    E -->|Confirmed outside area| D
+    E -->|Supported| F["Availability, schedule, experience and start date"]
+    E -->|Ambiguous or typo| Q["Targeted clarification"]
+    Q -->|Resolved| E
+    Q -->|Two failed attempts| R["Needs review; human queue"]
+
+    F --> G{"All seven fields valid?"}
+    G -->|Yes| H["Qualified; recruiter summary and handoff"]
+    G -->|Missing or ambiguous| T["Ask only for the unresolved field"]
+    T -->|Resolved| F
+    T -->|Two failed attempts| R
+
+    H --> J["Optional contact booking"]
+
+    F -. "Silence at any active stage" .-> S["Persist state; 24h reminder; 72h final; 7 days incomplete"]
+
+    classDef primary fill:#20271A,color:#FFFFFF,stroke:#20271A,stroke-width:2px;
+    classDef process fill:#F5FFEE,color:#20271A,stroke:#343F2B,stroke-width:1.5px;
+    classDef decision fill:#FFFFFF,color:#20271A,stroke:#97FF48,stroke-width:3px;
+    classDef qualified fill:#97FF48,color:#20271A,stroke:#343F2B,stroke-width:2px;
+    classDef terminal fill:#DAE3D3,color:#20271A,stroke:#343F2B,stroke-width:1.5px;
+    classDef designed fill:#F6F3EC,color:#343F2B,stroke:#343F2B,stroke-width:1.5px,stroke-dasharray:5 4;
+
+    class A,B primary;
+    class C,E,F,Q,T,J process;
+    class G decision;
+    class H qualified;
+    class I,D,R terminal;
+    class S designed;

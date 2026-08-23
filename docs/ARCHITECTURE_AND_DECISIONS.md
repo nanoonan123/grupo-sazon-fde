@@ -344,6 +344,50 @@ grouped under `ATS`, `Conversations`, `Voice`, `Recruiter`, and `Operations` so 
 are discoverable without conflating their audiences. A production deployment must
 protect or disable interactive API documentation as part of environment hardening.
 
+## ATS integration contract
+
+The simulated intake endpoint is `POST /api/ats/applications`. Its JSON payload
+contains `external_application_id`, `phone_number`, `source` and optional
+`preferred_language`; each delivery requires an `Idempotency-Key` header. A new
+delivery returns 201, an identical replay returns 200, conflicting reuse of an
+idempotency key or business identity returns 409, and invalid input returns 422.
+
+The caller should retry only network/timeout failures with the same idempotency
+key and bounded backoff; it must not retry 409 or 422 unchanged. A production ATS
+integration additionally requires a verified webhook signature, replay window and
+scoped credentials. Those controls are designed, not implemented in this demo.
+
+## Re-engagement design
+
+Re-engagement is not implemented. In production, a scheduler would create an
+idempotent 24-hour reminder for an in-progress conversation, then a final reminder
+at 72 hours. At seven days it would set the conversation to incomplete. Jobs must
+stop on any candidate response, terminal completion, explicit opt-out or deletion,
+and must be uniquely keyed per conversation/reminder type to prevent duplicate
+delivery.
+
+## Production deployment and 10K candidates/week
+
+At 10K candidates per week, stateless FastAPI replicas can scale horizontally
+behind a load balancer while managed PostgreSQL holds authoritative state and
+database constraints enforce idempotency and booking capacity. A managed
+asynchronous job queue should handle reminders, outbound notifications and other
+slow work; request paths should remain short and retry only bounded provider
+failures. Provider rate limits, connection timeouts and retries need central
+configuration.
+
+Monitoring should cover P50/P95 latency, completion and drop-off by stage,
+provider errors, queue age and estimated model cost. Load tests should validate
+peak intake, duplicate delivery and booking contention before launch. Security
+still requires secret management, HTTPS, signed webhooks, authentication/RBAC,
+signed candidate access and retention controls.
+
+Kubernetes and Kafka are unnecessary initially: this workload does not require
+multi-cluster orchestration or a high-volume event-streaming platform to reach the
+stated scale. Managed replicas, PostgreSQL and a queue are simpler to operate and
+can be replaced only when measured throughput or organizational requirements
+justify them.
+
 ## Immediate constraints
 
 - Service-area entries are synthetic demo configuration, not researched business
@@ -359,6 +403,10 @@ protect or disable interactive API documentation as part of environment hardenin
 ## LLM Model Selection
 
 _Last reviewed: 22 August 2026._
+
+No LLM benchmark has been executed for this project. GPT-5.6 Luna is an initial
+cost-and-latency hypothesis pending task-specific evaluation; the comparison notes
+below describe a proposed evaluation set, not measured results.
 
 ### Decision principles
 
