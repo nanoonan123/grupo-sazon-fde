@@ -3,8 +3,8 @@
 ## Scope
 
 This document records the initial technical boundaries and provisional choices for
-the candidate screening application. It complements, rather than repeats, the
-Phase 1 Process Design in `PROCESS_DESIGN.docx`.
+the candidate screening application. The client-facing Process Design is
+maintained externally and is intentionally not duplicated here.
 
 The current foundation provides configuration, structured domain contracts,
 deterministic eligibility rules, a health endpoint, asynchronous persistence,

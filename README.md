@@ -1,205 +1,100 @@
 # Grupo Sazón Candidate Screening
 
-Python foundation for a bilingual candidate screening service. The current scope
-includes a FastAPI API, Pydantic domain contracts, deterministic eligibility
-rules, asynchronous SQLite persistence, simulated ATS intake, synthetic demo
-service areas, a transient LangGraph screening workflow, and automated tests.
+A bilingual mobile-web screening demo for delivery-driver candidates. It collects
+seven job-related fields, preserves partial answers and applies deterministic
+eligibility rules before handing qualified candidates to recruiters.
 
-## Requirements
+## Setup and run
 
-- Python 3.12 or 3.13
+Requirements: Python 3.12 or 3.13 and an OpenAI API key for LLM-backed
+conversation turns.
 
-## Local setup
+In Bash, from the project folder:
 
-Create and activate a virtual environment, then install the project with its
-development dependencies:
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install -e ".[dev]"
-Copy-Item .env.example .env
+cp .env.example .env
 ```
 
-Run the API:
+Open `.env` and set `OPENAI_API_KEY` to a valid key. Then start the application:
 
-```powershell
+```bash
 python -m uvicorn app.main:app --reload
 ```
 
-Open `http://127.0.0.1:8000/health`; it returns `{"status":"ok"}`. Local
-interactive API documentation is available at `http://127.0.0.1:8000/docs`,
-grouped under **ATS**, **Conversations**, **Voice**, **Recruiter**, and
-**Operations**. Production deployments must protect or disable interactive
-documentation.
+Open these local URLs:
 
-The local database defaults to `data/grupo_sazon.db`. Override `DATABASE_URL` in
-`.env` when a different database is required.
+- Demo launcher: <http://127.0.0.1:8000/demo>
+- Recruiter panel: <http://127.0.0.1:8000/recruiter>
+- API reference: <http://127.0.0.1:8000/docs>
 
-Conversation endpoints use these settings:
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `OPENAI_API_KEY` | empty | Required only when an actual LLM-backed message is processed |
-| `OPENAI_MODEL` | `gpt-5.6-luna` | Responses API model used for interpretation and summaries |
-| `OPENAI_TIMEOUT_SECONDS` | `8` | Short timeout applied to each provider attempt |
-| `AMBIGUITY_RETRY_LIMIT` | `2` | Clarification attempts before human review |
-| `SERVICE_AREAS_PATH` | `data/service_areas.json` | Deterministic service-area configuration |
-
-The application and `/health` start without an OpenAI key. A message that needs
-the production provider without a configured key is safely persisted and receives
-a retry response; it does not crash the API.
-
-## API endpoints
-
-Create an application and its initial conversation using a unique idempotency
-key:
+The launcher creates a simulated ATS application and opens its candidate chat
+directly. To run checks:
 
 ```bash
-curl -i -X POST http://127.0.0.1:8000/api/ats/applications \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: demo-event-1001" \
-  -d '{
-    "external_application_id": "ats-application-1001",
-    "phone_number": "+34600000000",
-    "source": "demo-ats",
-    "preferred_language": "es"
-  }'
-```
-
-The first request returns HTTP 201. Repeating the same key and payload returns
-HTTP 200 with the original result. The `(source, external_application_id)` pair is
-also unique: an identical delivery under a new key returns the existing result,
-while conflicting candidate data returns HTTP 409.
-
-Retrieve the identifiers returned by intake:
-
-```bash
-curl http://127.0.0.1:8000/api/applications/<application_id>
-curl http://127.0.0.1:8000/api/conversations/<conversation_id>
-```
-
-Start the conversation once, then send candidate messages using the returned
-conversation identifier. The roughly three-minute invitation asks for the full
-name as the opt-in action. A single given name is retained while the assistant
-asks for the surname; a complete name then continues the screening:
-
-```bash
-curl -X POST \
-  http://127.0.0.1:8000/api/conversations/<conversation_id>/start
-
-curl -X POST \
-  http://127.0.0.1:8000/api/conversations/<conversation_id>/messages \
-  -H "Content-Type: application/json" \
-  -d '{"text":"Sí, soy Alex Rivera."}'
-```
-
-`/start` is idempotent. Explicit refusal stops the conversation without a
-disqualification. Each message response includes the persisted assistant message,
-selected conversation language, deterministic progress, missing fields, and a
-terminal outcome when applicable.
-
-Progress covers seven screening criteria: full name, driver's license, service
-area, availability, preferred schedule, delivery experience, and start date.
-Language and consent are process metadata, not selection criteria. Zero years of
-delivery experience is complete without a platform; positive experience requires
-at least one platform name.
-
-Configured demo locations use canonical country codes `ES` and `MX`. City and zone
-can identify a supported area without asking for country when the pair is unique.
-For example, `Madrid Centro`, `madrid city center`, `Madrid city centre`,
-`downtown Madrid`, and `España, Madrid centro` resolve to canonical
-`ES / Madrid / Centro`. `CDMX centro` and `downtown Mexico City` resolve to the
-configured Mexico demo area. Partial answers combine with validated location state;
-close spellings require explicit confirmation before persistence. Spain or Mexico
-alone never constitutes a supported service area.
-
-## Demo web surfaces
-
-With the API running, open:
-
-- Candidate mobile chat: `http://127.0.0.1:8000/screen/<conversation_id>`
-- Simulated ATS launcher: `http://127.0.0.1:8000/demo`
-- Recruiter operations dashboard: `http://127.0.0.1:8000/recruiter`
-- Developer API documentation: `http://127.0.0.1:8000/docs`
-
-Suggested demo walkthrough:
-
-1. Open `/demo`, enter the phone and preferred language, and create a demo application.
-2. The browser opens the candidate screening directly.
-3. Enter a full name, then answer the remaining screening criteria.
-4. Refresh the candidate page to verify that the complete transcript is restored.
-5. Open `/recruiter` to review measured demo KPIs, filters, candidate details,
-   structured fields, transcript, and provider operations metadata.
-
-For the operational walkthrough intended for a client or evaluator, see
-[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md).
-
-The launcher is explicitly a simulated ATS delivery, not a recruiter workflow.
-The dashboard separates metrics calculated from persisted synthetic records from
-the client-stated baseline of approximately 200 weekly applications, 60% missed
-phone contact, and 80% recruiter time spent on unqualified candidates. The demo
-does not claim ROI or business improvement.
-
-### Demo security limitations
-
-The pages are intentionally unauthenticated for local evaluation. Production
-requires recruiter authentication and role-based access control, signed expiring
-candidate links, webhook signatures or scoped ATS credentials, protected or
-disabled Swagger access, transport security, and normal web hardening. None of
-those controls should be inferred from the local demo.
-
-Run checks:
-
-```powershell
 python -m pytest -q
 python -m ruff check .
 ```
 
-## Current and planned scope
+## Architecture overview
 
-Qualified candidates can choose a recruiter-contact slot: Wednesday/Thursday,
-10:00–14:00 in the canonical Spain or Mexico timezone, with one booking per
-country/time slot. The database stores UTC and the UI displays local time. Calendar
-synchronization and confirmation/reminder workflows remain future work.
+FastAPI serves the candidate chat, demo launcher, recruiter panel and API.
+Both text and optional voice turns call the same persisted conversation service.
+LangGraph coordinates stages; Pydantic defines the structured contract; the
+database is authoritative; and deterministic rules—not the LLM—validate data and
+select outcomes. SQLite is used for the local demo.
 
-Client reuse boundaries are service areas, copy, logo, and the semantic palette in
-`app/static/theme.css`; a deployment can override the palette without changing
-templates.
+OpenAI interprets candidate language and proposes structured values. The initial
+model choice, `gpt-5.6-luna`, is a hypothesis pending task-specific evaluation.
+The optional ElevenLabs browser widget handles speech only: its authenticated
+voice-turn adapter sends transcripts to the same backend workflow. End-to-end
+voice synchronization needs a public HTTPS endpoint and is not enabled locally.
+See [Architecture and Decisions](docs/ARCHITECTURE_AND_DECISIONS.md) for the
+technical rationale, integration contract and production scaling design.
 
-Implemented now: project packaging, environment configuration, health endpoint,
-domain models, deterministic rules, asynchronous persistence, idempotent ATS
-application intake, resource retrieval, structured OpenAI interpretation, an
-explicit LangGraph workflow, deterministic response routing, synthetic data, and
-tests. The current slice also includes server-rendered candidate, ATS-demo, and
-recruiter surfaces, read-only database-backed analytics, and qualified-candidate
-interview booking. Tests use
-`FakeScreeningProvider` and never call external APIs.
+## Key design decisions
 
-Planned but not implemented: database migrations and production PostgreSQL
-deployment, production authentication, signed candidate links, retrieval-augmented
-generation (RAG), re-engagement scheduling, telephony, and deployment automation.
+- **Database authority:** every completed turn persists transcript, structured
+  data, status, reason code and recruiter summary; browser state is not trusted.
+- **Deterministic eligibility:** the LLM interprets language but never decides
+  whether a candidate qualifies, is disqualified or needs review.
+- **Safe conversation recovery:** useful partial answers are retained; targeted
+  clarification precedes human review; ambiguity is never guessed.
+- **Idempotent integrations:** ATS intake and voice provider turn IDs prevent
+  duplicate applications or messages on retries.
+- **Demo boundaries:** service areas, identities and metrics are synthetic.
+  Browser voice is optional; production authentication, reminders, calendar
+  synchronization and deployment are outside this local demo.
 
-The browser-based ElevenLabs voice UI and authenticated backend turn adapter are
-implemented and adapter tests are network-free. A standalone ElevenLabs agent has
-been manually validated; end-to-end webhook synchronization needs a public HTTPS
-endpoint and is not enabled in the local submitted demo. See
-[`docs/ELEVENLABS_CONFIGURATION.md`](docs/ELEVENLABS_CONFIGURATION.md).
+## Bonus feature scope
 
-## Assignment coverage
-
-| Area | Status | Scope note |
+| Feature | Status | Scope note |
 | --- | --- | --- |
-| ATS intake and idempotency | Implemented | Simulated ATS endpoint, persisted application/conversation and duplicate handling. |
-| Candidate messaging and deterministic eligibility | Implemented | Seven fields, ES/EN conversation, persisted state and deterministic outcomes. |
-| Recruiter panel and analytics | Implemented | Read-only database-backed applications, outcomes, metrics and booking visibility. |
-| Automated tests | Implemented | Network-free unit and integration coverage using the fake provider. |
-| Browser voice and voice-turn adapter | Partial | UI and authenticated adapter exist; public-HTTPS end-to-end synchronization is not enabled locally. |
-| Production deployment | Partial | The architecture is documented; managed infrastructure and hardening are not deployed. |
-| Re-engagement reminders | Designed/deferred | 24h/72h reminders and seven-day closure are process design only. |
-| RAG | Intentionally excluded | No approved knowledge base or retrieval implementation is included. |
-| Submission video | Pending deliverable | Not produced by this repository. |
+| RAG | ❌ Not implemented | Approved-content retrieval is a planned improvement. |
+| Multi-language | ✅ Implemented | Spanish/English detection, explicit switching and code-switching preserve state. |
+| Sentiment analysis | ❌ Not implemented | Sentiment does not affect eligibility. |
+| Analytics | ✅ Implemented | Recruiter panel shows completion, drop-off, duration, turns and provider metrics. |
+| Re-engagement | ❌ Not implemented | The 24h/72h reminder design is documented only. |
+| Guardrails | ✅ Implemented | Deterministic eligibility, targeted clarification, abuse handling and deletion/stop paths. |
+| ATS integration design | ✅ Implemented | Idempotent intake endpoint and retry contract are documented and tested. |
+| Tests | ✅ Implemented | Network-free unit and integration scenarios use a fake provider. |
+| Deployment design | ✅ Implemented | Stateless scaling, PostgreSQL and operational monitoring are documented. |
 
-The Phase 1 process specification remains in `docs/PROCESS_DESIGN.docx`. Technical
-boundaries and provisional choices are recorded in
-[`docs/ARCHITECTURE_AND_DECISIONS.md`](docs/ARCHITECTURE_AND_DECISIONS.md).
+For voice provider configuration, see
+[ElevenLabs configuration](docs/ELEVENLABS_CONFIGURATION.md).
+
+## Potential improvements
+
+| Area | Technical improvement | Operational rationale |
+| --- | --- | --- |
+| Data platform | Migrate from SQLite to managed PostgreSQL with migrations, backups and connection pooling. | Supports concurrent recruiter and candidate traffic with durable recovery and production operations. |
+| Public voice channel | Deploy behind a public HTTPS endpoint with webhook verification and managed secrets. | Lets ElevenLabs submit authoritative turns and keeps browser/voice state synchronized. |
+| Recruiter security | Add recruiter login, RBAC, signed candidate links, audit controls and standard web hardening. | Limits personal-data access to authorized staff and supports accountable internal use. |
+| Approved-content RAG | Retrieve versioned, recruiter-approved job and company FAQs with grounded answers. | Handles supported policy questions without invented information; retrieval remains outside eligibility decisions. |
+| Re-engagement | Add an idempotent background job for 24h and 72h reminders, stopping on response, completion, opt-out or deletion. | Recovers paused conversations without treating silence as disqualification. |
+| Interview operations | Integrate booking with a recruiter calendar, confirmations and cancellation handling. | Converts qualified handoff into a managed operational workflow without promising employment. |
+
+Further production scaling, observability and deployment decisions are documented
+in [Architecture and Decisions](docs/ARCHITECTURE_AND_DECISIONS.md).
