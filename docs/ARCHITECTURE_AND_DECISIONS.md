@@ -211,8 +211,8 @@ until retrieval is implemented.
 
 Conversation start explains the screening purpose, expected duration, and
 available languages, then asks for the full name as the opt-in action. A valid
-name—alone or in an affirmative sentence—grants continuation consent and is
-stored in the same turn. Consent remains process metadata rather than a
+name—alone or in an affirmative sentence—begins the screening after the opening
+disclosure and is stored in the same turn. Consent remains process metadata rather than a
 qualification criterion. Explicit refusal produces the terminal
 `incomplete`/stopped route, never a disqualification.
 
@@ -295,7 +295,7 @@ results for an empty database.
 | Screening completed | Records ending in a deterministic decision: qualified, disqualified, or needs review. Stopped and deleted records are reported separately. |
 | Completion rate | Screening completed divided by screening started; represented as a ratio from 0 to 1. |
 | Qualification rate | Qualified divided by screening completed; represented as a ratio from 0 to 1. |
-| Interview booking rate | Qualified applications with a persisted interview booking, divided by qualified applications. |
+| Recruiter contact-slot booking rate | Qualified applications with a persisted recruiter contact-slot booking, divided by qualified applications. |
 | Stopped | Records with the existing `incomplete` outcome, presented as stopped in the recruiter read model. |
 | Deleted | Records with the `deleted` data-deletion outcome. |
 | Drop-off by current stage | Operational snapshot of in-progress and stopped non-completions. In-progress records use their persisted stage; stopped records use their first missing screening criterion. This is not proof of abandonment. |
@@ -310,7 +310,7 @@ not answering phone calls, and 80% of recruiter time spent on unqualified
 candidates. The baseline is context supplied by the client, not a measurement from
 this database. The UI makes no ROI or improvement claim.
 
-### Interview booking demo boundary
+### Recruiter contact-slot booking demo boundary
 
 Only candidates with a persisted `qualified` outcome can reserve a recruiter
 contact slot. The demo generates capacity-one 30-minute slots on Wednesday and

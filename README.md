@@ -41,7 +41,7 @@ python -m ruff check .
 ## Architecture overview
 
 FastAPI serves the candidate chat, demo launcher, recruiter panel and API.
-Both text and optional voice turns call the same persisted conversation service.
+Text messages use the persisted conversation service. A voice-turn adapter is available for the same workflow design, while end-to-end ElevenLabs synchronization requires a public HTTPS endpoint.
 LangGraph coordinates stages; Pydantic defines the structured contract; the
 database is authoritative; and deterministic rules—not the LLM—validate data and
 select outcomes. SQLite is used for the local demo.
@@ -56,8 +56,7 @@ technical rationale, integration contract and production scaling design.
 
 ## Key design decisions
 
-- **Database authority:** every completed turn persists transcript, structured
-  data, status, reason code and recruiter summary; browser state is not trusted.
+- **Database authority:** Every turn persists the transcript and current screening state. Terminal outcomes additionally persist the outcome reason, when applicable, and a concise recruiter summary..
 - **Deterministic eligibility:** the LLM interprets language but never decides
   whether a candidate qualifies, is disqualified or needs review.
 - **Safe conversation recovery:** useful partial answers are retained; targeted
@@ -74,7 +73,7 @@ technical rationale, integration contract and production scaling design.
 | --- | --- | --- |
 | RAG | ❌ Not implemented | Approved-content retrieval is a planned improvement. |
 | Multi-language | ✅ Implemented | Spanish/English detection, explicit switching and code-switching preserve state. |
-| Sentiment analysis | ❌ Not implemented | Sentiment does not affect eligibility. |
+| Sentiment analysis | ❌ Not implemented | A warm formal tone shall be mantained in an screening process. |
 | Analytics | ✅ Implemented | Recruiter panel shows completion, drop-off, duration, turns and provider metrics. |
 | Re-engagement | ❌ Not implemented | The 24h/72h reminder design is documented only. |
 | Guardrails | ✅ Implemented | Deterministic eligibility, targeted clarification, abuse handling and deletion/stop paths. |
