@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -143,6 +143,7 @@ def _demo_defaults() -> dict[str, str]:
     return {
         "external_application_id": "LI-GS-DEMO-0001",
         "phone_number": "+34600123456",
+        "phone_country": "+34",
         "source": "linkedin",
         "preferred_language": Language.ES.value,
     }
@@ -157,12 +158,11 @@ async def demo_launcher(request: Request) -> HTMLResponse:
         name="demo.html",
         context={
             "form": _demo_defaults(),
-            "result": None,
         },
     )
 
 
-@router.post("/demo", response_class=HTMLResponse)
+@router.post("/demo")
 async def create_demo_application(
     request: Request,
     session: Session,
@@ -170,7 +170,7 @@ async def create_demo_application(
     phone_number: Annotated[str, Form(min_length=1, max_length=50)],
     source: Annotated[str, Form(min_length=1, max_length=100)],
     preferred_language: Annotated[str | None, Form()] = Language.ES.value,
-) -> HTMLResponse:
+) -> RedirectResponse:
     """Create a demo application through the shared ATS intake operation."""
 
     try:
@@ -195,15 +195,7 @@ async def create_demo_application(
     candidate_url = str(
         request.url_for("candidate_screen", conversation_id=result.conversation_id)
     )
-    return templates.TemplateResponse(
-        request=request,
-        name="demo.html",
-        context={
-            "form": payload.model_dump(mode="json"),
-            "result": result,
-            "candidate_url": candidate_url,
-        },
-    )
+    return RedirectResponse(url=candidate_url, status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/recruiter", response_class=HTMLResponse, name="recruiter_dashboard")

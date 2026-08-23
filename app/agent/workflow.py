@@ -457,6 +457,21 @@ def build_screening_graph(
         }
         if interpretation.intent is CandidateIntent.VOICE_SWITCH:
             return updates
+        if (
+            state["stage"] is ScreeningStage.FULL_NAME
+            and not (interpretation.updates.full_name or "").strip()
+            and not any(
+                interpretation.updates.model_dump(exclude={"full_name"}).values()
+            )
+        ):
+            candidate_text = _latest_candidate_text(state)
+            tokens = re.findall(r"[^\W_]+", candidate_text)
+            if (
+                len(tokens) == 1
+                and tokens[0].casefold() not in {"hola", "holaaa", "hello", "hi"}
+            ):
+                interpretation = interpretation.model_copy(deep=True)
+                interpretation.updates.full_name = tokens[0]
         if interpretation.explicit_language_switch is not None:
             data.language = interpretation.explicit_language_switch
             counts.pop("language", None)

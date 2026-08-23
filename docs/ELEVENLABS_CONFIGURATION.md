@@ -58,15 +58,14 @@ changing `.env` values.
    with widget authentication disabled, as required by the widget documentation.
 5. In **Security**, add the local/tunnel origins you will use to the agent allowlist.
 6. Ensure Spanish (`es`) and English (`en`) are supported. The page passes the
-   authoritative backend language as both the `language` dynamic variable and the
-   widget language override.
-7. Enable the agent configuration overrides for **Language** and **First message**;
-   the widget uses those two fields to continue from authoritative backend state.
+   authoritative backend language as `conversation_language` and the persisted
+   opening as `voice_first_message`.
 
 The application passes these non-secret dynamic variables to the widget:
 
 - `conversation_id`: the backend conversation UUID.
-- `language`: the current authoritative language (`es` or `en`).
+- `voice_first_message`: the persisted assistant opening.
+- `conversation_language`: the current authoritative language (`es` or `en`).
 
 ## 4. Webhook tool
 
@@ -132,7 +131,7 @@ message override. Do not maintain a separate opening question in the agent promp
 ## 6. Test the integration
 
 1. Create a demo application at `/demo`.
-2. Select **Open voice screening**.
+2. Select **Continuar por voz**.
 3. Allow microphone access and answer the opening question.
 4. In ElevenLabs call history, verify one `submit_screening_turn` call per candidate
    answer and confirm its URL contains the backend `conversation_id`.

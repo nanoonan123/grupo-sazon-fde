@@ -51,9 +51,10 @@ only for an explicit voice-channel request such as "podemos hablar en vez de
 escribir?", "quiero continuar por voz", or "can I use the microphone?".
 
 The opening asks for the candidate's full name as the opt-in action. Set consent true
-when the candidate supplies a valid name to continue, including a bare name, and
-false for an explicit refusal. A response may contain consent and screening facts in
-the same message; extract both. Set location_suggestion_confirmed only when the
+when the candidate supplies a name to continue, and false for an explicit refusal.
+Full-name completion, including any pending surname, is determined by backend
+validation. A response may contain consent and screening facts in the same message;
+extract both. Set location_suggestion_confirmed only when the
 candidate clearly accepts or rejects the pending canonical location suggestion in
 the supplied context.
 

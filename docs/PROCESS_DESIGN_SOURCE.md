@@ -18,8 +18,9 @@ result or ROI claim.
 opening identifies Grupo Sazón, states the approximate three-minute duration, and
 asks for the candidate's full name as the opt-in action. The ATS language hint
 selects Spanish or English; explicit requests and clear sentence-level changes may
-switch language. A name or isolated foreign word does not. Browser voice exists
-only as a separate prototype and is not part of the authoritative flow.
+switch language. A name or isolated foreign word does not. An optional browser
+voice interface and authenticated adapter use the same persisted workflow, but
+end-to-end webhook use needs a public HTTPS deployment and is not enabled locally.
 
 **Decision ownership.** The LLM understands language and proposes structured
 extraction. Deterministic Python validates catalogue locations and field semantics;
@@ -72,7 +73,7 @@ flowchart LR
 | Availability | full-time, part-time, weekends | One or more required; collected, not a disqualifier. |
 | Preferred schedule | morning, afternoon, evening, flexible | One or more retained; collected, not a disqualifier. |
 | Delivery experience | years ≥ 0 + platforms | Zero is valid without platform; positive years require a platform. |
-| Start date | raw + confirmed ISO date | Must be explicit and not past; relative dates require confirmation. |
+| Start date | raw + normalized ISO date | Must not be past; high-confidence relative dates are normalized, while ambiguous dates are clarified. |
 
 ### 4. Outcomes, recovery and boundaries
 
@@ -104,5 +105,5 @@ implemented.
 - **Safety and privacy:** one calm abuse warning precedes deterministic closure.
   Production still requires authentication/RBAC, signed candidate links, webhook
   verification, retention/deletion controls, rate limits and transport hardening.
-- **Deferred scope:** approved-content RAG, backend-connected voice, reminders,
-  human workflow actions, production deployment and measured business impact.
+- **Deferred scope:** approved-content RAG, reminders, human workflow actions,
+  production deployment and measured business impact.

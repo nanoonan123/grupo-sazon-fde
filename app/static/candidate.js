@@ -10,7 +10,7 @@
   const typing = document.querySelector("#typing-indicator");
   const networkBanner = document.querySelector("#network-banner");
   const terminalBanner = document.querySelector("#terminal-banner");
-  const bookingPanel = document.querySelector("#booking-panel");
+  let bookingPanel = null;
   const retryButton = document.querySelector("#retry-button");
   const progressValue = document.querySelector("#progress-value");
   const progressFill = document.querySelector("#progress-fill");
@@ -96,6 +96,23 @@
     if (displayOutcome === "qualified") loadInterviewBooking();
   }
 
+  function getBookingPanel() {
+    if (bookingPanel) return bookingPanel;
+    bookingPanel = document.createElement("section");
+    bookingPanel.className = "booking-panel";
+    bookingPanel.id = "booking-panel";
+    bookingPanel.setAttribute("aria-live", "polite");
+    bookingPanel.hidden = true;
+    terminalBanner.insertAdjacentElement("afterend", bookingPanel);
+    return bookingPanel;
+  }
+
+  function marketTimeLabel(timezone) {
+    const mexico = timezone === "America/Mexico_City";
+    if (document.documentElement.lang === "en") return mexico ? "Mexico City time" : "Madrid time";
+    return mexico ? "hora de Ciudad de México" : "hora de Madrid";
+  }
+
   function bookingText(booking) {
     const options = { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: booking.timezone };
     const date = new Intl.DateTimeFormat(document.documentElement.lang, options).format(new Date(booking.starts_at_utc));
@@ -104,16 +121,18 @@
   }
 
   function showBookingConfirmation(booking) {
+    const panel = getBookingPanel();
     const { date, time } = bookingText(booking);
-    bookingPanel.hidden = false;
-    bookingPanel.textContent = document.documentElement.lang === "en"
-      ? `Interview reserved for ${date} at ${time} (${booking.timezone}). Grupo Sazón's recruitment team will contact you at that time.`
-      : `Entrevista reservada para el ${date} a las ${time} (${booking.timezone}). El equipo de selección de Grupo Sazón contactará contigo en ese horario.`;
+    panel.hidden = false;
+    panel.textContent = document.documentElement.lang === "en"
+      ? `Interview reserved for ${date} at ${time}, ${marketTimeLabel(booking.timezone)}. Grupo Sazón's recruitment team will contact you at that time.`
+      : `Entrevista reservada para el ${date} a las ${time}, ${marketTimeLabel(booking.timezone)}. El equipo de selección de Grupo Sazón contactará contigo en ese horario.`;
   }
 
   function renderBookingSelector(slots) {
-    bookingPanel.hidden = false;
-    bookingPanel.replaceChildren();
+    const panel = getBookingPanel();
+    panel.hidden = false;
+    panel.replaceChildren();
     const prompt = document.createElement("strong");
     prompt.textContent = document.documentElement.lang === "en" ? "Choose a time for the recruiting team to contact you." : "Elige una hora para que el equipo de selección contacte contigo.";
     const select = document.createElement("select");
@@ -121,7 +140,7 @@
       const option = document.createElement("option");
       const { date, time } = bookingText(slot);
       option.value = slot.starts_at_utc;
-      option.textContent = `${date} · ${time} (${slot.timezone})`;
+      option.textContent = `${date} · ${time} (${marketTimeLabel(slot.timezone)})`;
       select.append(option);
     });
     const button = document.createElement("button");
@@ -135,21 +154,24 @@
         showBookingConfirmation(booking);
       } catch (_error) {
         button.disabled = false;
-        bookingPanel.append(document.createTextNode(document.documentElement.lang === "en" ? " That slot is no longer available; please reload." : " Ese horario ya no está disponible; recarga la página."));
+        panel.append(document.createTextNode(document.documentElement.lang === "en" ? " That slot is no longer available; please reload." : " Ese horario ya no está disponible; recarga la página."));
       }
     });
-    bookingPanel.append(prompt, select, button);
+    panel.append(prompt, select, button);
   }
 
   async function loadInterviewBooking() {
-    if (app.dataset.outcome !== "qualified" || bookingPanel.dataset.loaded === "true") return;
-    bookingPanel.dataset.loaded = "true";
+    if (app.dataset.outcome !== "qualified") return;
+    const panel = getBookingPanel();
+    if (panel.dataset.loaded === "true") return;
+    panel.dataset.loaded = "true";
     try {
       const payload = await request(`/api/conversations/${encodeURIComponent(conversationId)}/interview-slots`);
       if (payload.booking) showBookingConfirmation(payload.booking);
       else if (payload.slots.length) renderBookingSelector(payload.slots);
     } catch (_error) {
-      bookingPanel.dataset.loaded = "";
+      panel.remove();
+      bookingPanel = null;
     }
   }
 

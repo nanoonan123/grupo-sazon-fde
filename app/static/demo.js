@@ -1,14 +1,9 @@
 (() => {
-  const copyButton = document.querySelector("#copy-link");
-  const urlField = document.querySelector("#candidate-url");
-  if (!copyButton || !urlField) return;
-  copyButton.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(urlField.value);
-      copyButton.textContent = document.documentElement.lang === "en" ? "Copied" : "Copiado";
-    } catch (_error) {
-      urlField.select();
-      document.execCommand("copy");
-    }
+  const country = document.querySelector("#phone-country");
+  const phone = document.querySelector("input[name='phone_number']");
+  if (!country || !phone) return;
+
+  country.addEventListener("change", () => {
+    if (!phone.value || /^\+(34|52)/.test(phone.value)) phone.value = country.value;
   });
 })();

@@ -138,17 +138,12 @@ Python so they can be audited and tested without the framework.
 
 LangGraph is still useful because it makes state, node boundaries, transitions,
 terminal branching, and LLM-versus-deterministic responsibilities explicit. The
-compiled graph is straightforward to test with a fake provider, and its real
-update stream supplies observability without fabricating execution steps. It also
-gives a controlled extension point for future human-in-the-loop review or
-re-engagement branches without moving those decisions into prompts.
+compiled graph is straightforward to test with a fake provider and gives a
+controlled extension point for future human-in-the-loop review or re-engagement
+branches without moving those decisions into prompts.
 
 The implementation follows the official [Graph API](https://docs.langchain.com/oss/python/langgraph/graph-api)
-and [streaming](https://docs.langchain.com/oss/python/langgraph/streaming)
-concepts. [LangSmith Studio](https://docs.langchain.com/langsmith/studio) and
-LangGraph Agent Server are not runtime dependencies in this slice: they would add
-deployment and operational surface beyond what the local assignment needs. Studio
-may be evaluated later as development tooling, but the demo does not depend on it.
+concepts. It has no separate tracing or agent-server dependency.
 
 ### Responses API and Pydantic Structured Outputs
 
@@ -248,8 +243,7 @@ Clarification counters advance only when a candidate fails a requested follow-up
 not when the resolver creates an initial incomplete/suggestion state.
 
 The current Spain and Mexico entries are explicitly synthetic demo data, not
-researched Grupo Sazón service locations. The source and correction history are
-documented in `MANUAL_TEST_REPORT.md`.
+researched Grupo Sazón service locations.
 
 Provider attempts have a short configured timeout. Timeout, connection, and rate
 limit failures receive no more than two bounded exponential-backoff retries.

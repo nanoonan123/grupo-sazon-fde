@@ -22,7 +22,7 @@
         <img src="{{ url_for('static', path='/logo.svg') }}" alt="" width="42" height="42">
         <div>
           <strong>Grupo Sazón</strong>
-          <span data-copy-es="Asistente de selección · activo" data-copy-en="Recruitment assistant · active">Asistente de selección · activo</span>
+          <span data-copy-es="Screening de candidatura" data-copy-en="Candidate screening">Screening de candidatura</span>
         </div>
       </div>
     </header>
@@ -30,8 +30,8 @@
     <section class="assistant-disclosure" aria-label="Información del asistente">
       <span class="presence-dot" aria-hidden="true"></span>
       <div>
-        <strong data-copy-es="Asistente de selección con IA" data-copy-en="AI recruitment assistant">Asistente de selección con IA</strong>
-        <span data-copy-es="Tus respuestas se guardan para que selección las revise." data-copy-en="Your answers are saved for the recruitment team's review.">Tus respuestas se guardan para que selección las revise.</span>
+        <strong data-copy-es="Asistente con IA" data-copy-en="AI assistant">Asistente con IA</strong>
+        <span data-copy-es="Tus respuestas se guardan para revisión del equipo de selección." data-copy-en="Your answers are saved for the recruitment team’s review.">Tus respuestas se guardan para revisión del equipo de selección.</span>
       </div>
     </section>
 
@@ -65,7 +65,6 @@
     </section>
 
     <section class="terminal-banner" id="terminal-banner" role="status" hidden></section>
-    <section class="booking-panel" id="booking-panel" aria-live="polite" hidden></section>
     {% if voice_enabled %}<button class="voice-switch-action" type="button" id="open-voice" data-copy-es="Continuar por voz" data-copy-en="Continue by voice">🎙️ <span>Continuar por voz</span></button><dialog class="voice-dialog" id="voice-dialog"><button type="button" id="close-voice">×</button><p>Permite el acceso al micrófono cuando el navegador lo solicite.</p><elevenlabs-convai agent-id="{{ voice_agent_id }}" dynamic-variables='{{ {"conversation_id": conversation_id, "voice_first_message": voice_first_message, "conversation_language": ui_language} | tojson }}' variant="expanded"></elevenlabs-convai></dialog><script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>{% endif %}
     <section class="network-banner" id="network-banner" role="alert" hidden>
       <span data-copy-es="No pudimos conectar. Tu historial está guardado; inténtalo de nuevo." data-copy-en="We couldn't connect. Your history is saved; please try again.">No pudimos conectar. Tu historial está guardado; inténtalo de nuevo.</span>

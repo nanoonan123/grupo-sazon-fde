@@ -181,7 +181,8 @@ def test_candidate_page_loads(tmp_path: Path) -> None:
         response = client.get(f"/screen/{application['conversation_id']}")
 
     assert response.status_code == 200
-    assert "Asistente de selección con IA" in response.text
+    assert "Asistente con IA" in response.text
+    assert 'id="booking-panel"' not in response.text
     assert "0/7" in response.text
     assert "candidate.js" in response.text
     assert "language-switch" not in response.text
@@ -241,18 +242,11 @@ def test_demo_launcher_creates_application_and_candidate_link(
                 "source": "launcher-demo",
                 "preferred_language": "es",
             },
+            follow_redirects=False,
         )
 
-    assert response.status_code == 200
-    assert "Screening listo para compartir" in response.text
-    assert "/screen/" in response.text
-    assert "Configuración avanzada de demo" in response.text
-    assert "Identificador de negocio proporcionado por el ATS" in response.text
-    assert "esta demo local no envía SMS ni WhatsApp" in response.text
-    assert "Idempotency:" in response.text
-    assert "Abrir panel de selección" in response.text
-    assert "Abrir screening por voz" not in response.text
-    assert "Application ID" in response.text
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("http://testserver/screen/")
     with sqlite3.connect(database_path) as connection:
         assert connection.execute(
             "SELECT COUNT(*) FROM candidate_applications"
@@ -262,7 +256,7 @@ def test_demo_launcher_creates_application_and_candidate_link(
         ).fetchone()[0] == 1
 
 
-def test_demo_launcher_uses_recruiting_defaults_and_source_selector(
+def test_demo_launcher_uses_recruiting_defaults_without_advanced_controls(
     tmp_path: Path,
 ) -> None:
     with web_client(tmp_path) as (client, _):
@@ -271,9 +265,11 @@ def test_demo_launcher_uses_recruiting_defaults_and_source_selector(
     assert response.status_code == 200
     assert "LI-GS-DEMO-0001" in response.text
     assert "+34600123456" in response.text
+    assert 'name="external_application_id"' in response.text
     assert '<option value="linkedin" selected>LinkedIn</option>' in response.text
-    for label in ("InfoJobs", "Careers page", "Referral", "Email"):
-        assert label in response.text
+    assert "País del teléfono" in response.text
+    assert "Configuración avanzada de demo" not in response.text
+    assert "Pista para el mensaje inicial" not in response.text
 
 
 def test_recruiter_list_filters_and_search(tmp_path: Path) -> None:

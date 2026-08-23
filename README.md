@@ -81,8 +81,8 @@ curl http://127.0.0.1:8000/api/conversations/<conversation_id>
 
 Start the conversation once, then send candidate messages using the returned
 conversation identifier. The roughly three-minute invitation asks for the full
-name as the opt-in action. A valid bare name or affirmative name response grants
-continuation consent and stores the name in the same turn:
+name as the opt-in action. A single given name is retained while the assistant
+asks for the surname; a complete name then continues the screening:
 
 ```bash
 curl -X POST \
@@ -125,12 +125,15 @@ With the API running, open:
 
 Suggested demo walkthrough:
 
-1. Open `/demo`, review the pre-filled ATS fields, and create a demo application.
-2. Copy or open the candidate screening link returned by the launcher.
-3. Enter a full name to opt in, then answer the remaining screening criteria.
+1. Open `/demo`, enter the phone and preferred language, and create a demo application.
+2. The browser opens the candidate screening directly.
+3. Enter a full name, then answer the remaining screening criteria.
 4. Refresh the candidate page to verify that the complete transcript is restored.
 5. Open `/recruiter` to review measured demo KPIs, filters, candidate details,
    structured fields, transcript, and provider operations metadata.
+
+For the operational walkthrough intended for a client or evaluator, see
+[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md).
 
 The launcher is explicitly a simulated ATS delivery, not a recruiter workflow.
 The dashboard separates metrics calculated from persisted synthetic records from
@@ -185,5 +188,4 @@ endpoint and is not enabled in the local submitted demo. See
 
 The Phase 1 process specification remains in `docs/PROCESS_DESIGN.docx`. Technical
 boundaries and provisional choices are recorded in
-`docs/ARCHITECTURE_AND_DECISIONS.md`. The focused Spanish usability diagnosis and
-corrections are recorded in `docs/MANUAL_TEST_REPORT.md`.
+[`docs/ARCHITECTURE_AND_DECISIONS.md`](docs/ARCHITECTURE_AND_DECISIONS.md).

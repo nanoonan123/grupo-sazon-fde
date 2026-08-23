@@ -47,6 +47,12 @@
     return pair?.[english() ? 1 : 0] || "—";
   }
 
+  function marketTimeLabel(timezone) {
+    const mexico = timezone === "America/Mexico_City";
+    if (english()) return mexico ? "Mexico City time" : "Madrid time";
+    return mexico ? "hora de Ciudad de México" : "hora de Madrid";
+  }
+
   function el(tag, className, content) {
     const element = document.createElement(tag);
     if (className) element.className = className;
@@ -127,7 +133,16 @@
     const outcomeCell = document.createElement("td");
     outcomeCell.append(statusPill(item.outcome));
     row.append(outcomeCell);
-    row.append(el("td", "nowrap", item.interview_starts_at_utc ? new Intl.DateTimeFormat(document.documentElement.lang, { dateStyle: "medium", timeStyle: "short", timeZone: item.interview_timezone }).format(new Date(item.interview_starts_at_utc)) : "—"));
+    const interviewCell = el("td", "interview-cell");
+    if (item.interview_starts_at_utc) {
+      interviewCell.append(
+        el("span", "nowrap", new Intl.DateTimeFormat(document.documentElement.lang, { dateStyle: "medium", timeStyle: "short", timeZone: item.interview_timezone }).format(new Date(item.interview_starts_at_utc))),
+        el("small", "interview-zone", marketTimeLabel(item.interview_timezone)),
+      );
+    } else {
+      interviewCell.textContent = "—";
+    }
+    row.append(interviewCell);
     row.append(el("td", "nowrap", new Intl.DateTimeFormat(document.documentElement.lang, { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.updated_at))));
     return row;
   }
@@ -203,7 +218,7 @@
       [english() ? "Status" : "Estado", localized(labels.status[item.status]) || item.status],
       [english() ? "Outcome" : "Resultado", localized(labels.status[item.outcome]) || item.outcome],
       [english() ? "Progress" : "Progreso", `${item.progress_collected}/${item.progress_total}`],
-      [english() ? "Interview" : "Entrevista", item.interview_starts_at_utc ? new Intl.DateTimeFormat(document.documentElement.lang, { dateStyle: "full", timeStyle: "short", timeZone: item.interview_timezone }).format(new Date(item.interview_starts_at_utc)) + ` (${item.interview_timezone})` : "—"],
+      [english() ? "Interview" : "Entrevista", item.interview_starts_at_utc ? `${new Intl.DateTimeFormat(document.documentElement.lang, { dateStyle: "full", timeStyle: "short", timeZone: item.interview_timezone }).format(new Date(item.interview_starts_at_utc))} · ${marketTimeLabel(item.interview_timezone)}` : "—"],
       [english() ? "Deterministic reason" : "Motivo determinista", payload.deterministic_reason],
       [english() ? "Escalation fields" : "Campos de escalado", payload.escalation_fields.join(", ") || "—"],
     ]);
