@@ -77,9 +77,9 @@ technical rationale, integration contract and production scaling design.
 | Analytics | ✅ Implemented | Recruiter panel shows completion, drop-off, duration, turns and provider metrics. |
 | Re-engagement | ❌ Not implemented | The 24h/72h reminder design is documented only. |
 | Guardrails | ✅ Implemented | Deterministic eligibility, targeted clarification, abuse handling and deletion/stop paths. |
-| ATS integration design | ✅ Implemented | Idempotent intake endpoint and retry contract are documented and tested. |
+| ATS integration design | ✅ Defined | Idempotent intake endpoint and retry contract are documented and tested. |
 | Tests | ✅ Implemented | Network-free unit and integration scenarios use a fake provider. |
-| Deployment design | ✅ Implemented | Stateless scaling, PostgreSQL and operational monitoring are documented. |
+| Deployment design | ✅ Defined | [Stateless scaling, PostgreSQL and operational monitoring](docs/ARCHITECTURE_AND_DECISIONS.md#production-deployment-and-10k-candidatesweek) are documented. |
 
 For voice provider configuration, see
 [ElevenLabs configuration](docs/ELEVENLABS_CONFIGURATION.md).
