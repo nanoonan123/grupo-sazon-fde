@@ -402,7 +402,7 @@ justify them.
 
 ## LLM Model Selection
 
-_Last reviewed: 22 August 2026._
+_Last reviewed: 23 August 2026._
 
 No LLM benchmark has been executed for this project. GPT-5.6 Luna is an initial
 cost-and-latency hypothesis pending task-specific evaluation; the comparison notes
@@ -423,6 +423,10 @@ Qualification is not delegated to the LLM. Deterministic domain rules validate t
 
 Model recency is used as an initial quality filter, but being the newest or largest model is not sufficient justification. The final choice must be supported by task-specific evaluations.
 
+Earlier options such as GPT-5.4 are therefore outside the first matrix unless a
+specific quality, cost, or reliability hypothesis justifies the additional
+comparison.
+
 ### Candidate models
 
 | Provider | Model | Decision | Rationale |
@@ -432,7 +436,7 @@ Model recency is used as an initial quality filter, but being the newest or larg
 | OpenAI | GPT-5.6 Luna | Benchmark finalist and initial production hypothesis | Optimized for fast, cost-sensitive workloads. It should be sufficient for short multilingual conversations, extraction, and tool calling if validated through evaluations. |
 | Anthropic | Claude Opus family | Not selected | Strong reasoning capability, but excessive cost and latency for this narrow, high-volume workflow. |
 | Anthropic | Claude Sonnet family | Viable alternative | A strong balanced option, particularly for instruction following and natural dialogue, but it does not add enough initial benchmark diversity to justify testing every provider. |
-| Anthropic | Claude Haiku 4.5 | Viable future benchmark | A relevant low-latency alternative. It would be the first Anthropic model evaluated if the initial finalists fail quality or reliability thresholds. |
+| Anthropic | Claude Haiku | Benchmark finalist | Provides an Anthropic comparison for concise multilingual extraction and operational reliability. |
 | Google | Gemini 3.5 Flash | Not selected for the initial benchmark | Its additional capability may be valuable for more complex agentic workflows, but it is not clearly necessary for this bounded collection process. |
 | Google | Gemini 3.5 Flash-Lite | Benchmark finalist | Designed for high-throughput and latency-sensitive workloads. It provides a useful cross-provider comparison for multilingual extraction, conversational quality, and cost. |
 
@@ -441,8 +445,12 @@ The initial benchmark therefore compares:
 - GPT-5.6 Luna: production-first cost and latency hypothesis.
 - GPT-5.6 Terra: higher-capability OpenAI reference.
 - Gemini 3.5 Flash-Lite: efficient cross-provider reference.
+- Claude Haiku: Anthropic cross-provider reference.
 
-Anthropic is not considered unsuitable. Claude Haiku 4.5 is the next candidate if the initial benchmark reveals shortcomings or if additional provider diversity is required. Limiting the first experiment to three models keeps the evaluation focused and reproducible.
+This is not a provider selection. The two OpenAI models exercise the configured
+provider at different capability levels, while Gemini and Anthropic provide two
+external comparisons. Limiting the first experiment to four models keeps the
+evaluation focused and reproducible without assuming that any provider is best.
 
 ### Open-weight models
 
@@ -507,7 +515,9 @@ Incorrect qualification is a release-blocking failure. Cost and latency will onl
 
 ### Current decision
 
-GPT-5.6 Luna is the initial production hypothesis because this is a bounded, high-volume workflow with deterministic qualification rules. GPT-5.6 Terra and Gemini 3.5 Flash-Lite will be used as comparison points.
+GPT-5.6 Luna is the initial production hypothesis because this is a bounded,
+high-volume workflow with deterministic qualification rules. GPT-5.6 Terra,
+Gemini 3.5 Flash-Lite, and Claude Haiku are the comparison finalists.
 
 The application will access models through a provider adapter so that model selection remains a configuration decision rather than a rewrite. The final production model will be selected from evaluation evidence, not brand preference or benchmark reputation.
 
