@@ -79,13 +79,13 @@ The first round should be deliberately limited to four complementary finalists:
 | --- | --- | --- | --- |
 | OpenAI | GPT-5.6 Luna | Finalist: current hypothesis | Tests the configured OpenAI path for cost-sensitive bilingual extraction. |
 | OpenAI | GPT-5.6 Terra | Finalist: higher-capability reference | Tests whether additional instruction following or ambiguity handling materially changes the result. |
-| Google | Gemini 3.5 Flash-Lite | Finalist: cross-provider reference | Adds one independent provider comparison for multilingual extraction, latency and cost. |
-| Anthropic | Claude Haiku | Finalist: cross-provider reference | Adds an Anthropic comparison for concise multilingual extraction and operational reliability. |
+| Google | Gemini 3.5 Flash-Lite | Finalist: efficient cross-provider reference | Google's stable, fastest and most cost-effective 3.5 model is a relevant high-throughput baseline for bounded multilingual extraction. Gemini 3.7 Flash is newer and more capable, but is positioned primarily for complex coding and agentic workflows rather than this deliberately narrow task. |
+| Anthropic | Claude Sonnet 5 | Finalist: primary Anthropic reference | Tests Anthropic's current Sonnet balance of speed and intelligence against the same extraction and ambiguity scenarios. |
+| Anthropic | Claude Haiku 4.5 | Optional cost/latency baseline | Tests whether Anthropic's faster, lower-cost model already meets the required quality threshold. |
 
 This is not a provider selection. Two OpenAI models test the already integrated
-provider at different capability levels, while Gemini and Anthropic provide two
-focused external comparisons. Four candidates keep one repeatable scenario suite
-manageable while covering the relevant provider and capability trade-offs.
+provider at different capability levels, while Gemini and Claude Sonnet provide
+focused external comparisons. 
 GPT-5.6 Sol is excluded because its additional coding/reasoning capability is not
 justified for this bounded, deterministic workflow.
 
@@ -104,7 +104,9 @@ control advantage.
 Only Luna is configured locally today; the other finalists are evaluation
 candidates. The provider adapter keeps a later production choice from requiring a
 workflow rewrite.
-See the [OpenAI model catalogue](https://developers.openai.com/api/docs/models)
+See the [OpenAI model catalogue](https://developers.openai.com/api/docs/models),
+the [Gemini model catalogue](https://ai.google.dev/gemini-api/docs/models),
+the [Claude model catalogue](https://platform.claude.com/docs/en/models/overview),
 and [LLM Model Selection](docs/ARCHITECTURE_AND_DECISIONS.md#llm-model-selection)
 for detailed rationale.
 
@@ -130,7 +132,9 @@ For voice provider configuration, see
 | Area | Technical improvement | Operational rationale |
 | --- | --- | --- |
 | Interview operations | Integrate booking with a recruiter Google calendar or similar, confirmations and cancellation handling. | Converts qualified handoff into a managed operational workflow. |
-| Model evaluation | Run the same multilingual scenario suite against GPT-5.6 Luna, GPT-5.6 Terra, Gemini 3.5 Flash-Lite and Claude Haiku. Measure field extraction accuracy, false qualification risk, latency and cost before selecting a production model. | Select the least expensive model that meets quality and reliability thresholds; an incorrect qualification is release-blocking. |
+| Humanized assistant identity | Not currently implemented. Test a friendly human-style identity such as “María”, with an avatar, while retaining clear AI disclosure. | This is a UX/product hypothesis for trust, engagement and completion—not a proven improvement. Validate it through A/B tests measuring completion rate and drop-off before considering it successful. |
+| WhatsApp transport | Not currently implemented. Add WhatsApp as another channel through Twilio or another WhatsApp Business provider, reusing `ConversationService`, `ScreeningRecord`, the LangGraph workflow and deterministic eligibility rules. Handle webhook intake, provider message IDs, idempotency and bounded retries. | Extends candidate reach without creating a separate screening workflow or duplicating business logic. |
+| Model evaluation | Run the same multilingual scenario suite against GPT-5.6 Luna, GPT-5.6 Terra, Gemini 3.5 Flash-Lite and Claude Sonnet 5, optionally adding Claude Haiku 4.5 as a cost/latency baseline. Measure extraction accuracy, ambiguity handling, false qualification risk, latency and cost before selecting a production model. | Select the least expensive model that meets quality and reliability thresholds; an incorrect qualification is release-blocking. |
 | Data platform | Migrate from SQLite to managed PostgreSQL with migrations, backups and connection pooling. | Supports concurrent recruiter and candidate traffic with durable recovery and production operations. |
 | Public voice channel | Deploy behind a public HTTPS endpoint with webhook verification and managed secrets. | Lets ElevenLabs submit authoritative turns and keeps browser/voice state synchronized. |
 | Recruiter security | Add recruiter login, and any internal security procedure of the company. | Limits personal-data access to authorized staff and supports accountable internal use. |
